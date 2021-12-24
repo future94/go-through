@@ -1,8 +1,8 @@
 package com.future94.gothrough.protocol.passway;
 
 import com.future94.gothrough.common.utils.ByteBufferUtils;
+import com.future94.gothrough.protocol.thread.AbstractNIORunnable;
 import com.future94.gothrough.protocol.thread.GoThroughNioContainer;
-import com.future94.gothrough.protocol.thread.GoThroughRunnable;
 import com.future94.gothrough.protocol.thread.GoThroughThreadFactory;
 import com.future94.gothrough.protocol.thread.ThreadManager;
 import lombok.AccessLevel;
@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
  * @author weilai
  */
 @Slf4j
-public class InteractivePassWay implements Runnable, GoThroughRunnable {
+public class InteractivePassWay extends AbstractNIORunnable implements Runnable {
 
     private boolean alive = false;
 
@@ -145,7 +145,7 @@ public class InteractivePassWay implements Runnable, GoThroughRunnable {
     }
 
     @Override
-    public void process(SelectionKey key) {
+    public void doProcess(SelectionKey key) {
         if (this.alive && key.isValid()) {
             ByteBuffer buffer = this.obtainByteBuffer();
             SocketChannel inputChannel = (SocketChannel) key.channel();

@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class GoThroughNioContainer {
 
-    public static final GoThroughNioContainer INSTANCE = new GoThroughNioContainer();
+    private static final GoThroughNioContainer INSTANCE = new GoThroughNioContainer();
 
     private GoThroughNioContainer() {
     }
@@ -48,7 +48,7 @@ public class GoThroughNioContainer {
 
     private final Object selectorLock = new Object();
 
-    private final Map<SelectableChannel, ProcessNode> channelProcessNodeMap = new ConcurrentHashMap<>();
+    private final Map<SelectableChannel, NioProcessNode> channelProcessNodeMap = new ConcurrentHashMap<>();
 
     private final CountDownUpLatch countDownUpLatch = new CountDownUpLatch();
 
@@ -61,14 +61,59 @@ public class GoThroughNioContainer {
      *            {@link SelectionKey#OP_READ}
      *            {@link SelectionKey#OP_WRITE}
      */
-    public static void register(SelectableChannel socketChannel, int ops, GoThroughRunnable runnable) throws IOException {
+    public static void register(SelectableChannel socketChannel, int ops, GoThroughNIORunnable runnable) throws IOException {
         getInstance().register0(socketChannel, ops, runnable);
     }
 
-    private void register0(SelectableChannel socketChannel, int ops, GoThroughRunnable runnable) throws IOException {
+    /**
+     * 根据 {@link SelectionKey} 恢复监听事件的注册
+     *
+     * @param key 原始的key
+     * @param ops 要与通过 {@link #register(SelectableChannel, int, GoThroughNIORunnable)}
+     *            注册的事件统一
+     * @throws IOException
+     */
+    public static boolean reRegisterByKey(SelectionKey key, int ops) {
+        return INSTANCE.reRegisterByKey0(key, ops);
+    }
+
+    /**
+     * 根据 {@link SelectionKey} 恢复监听事件的注册
+     *
+     * @param key 原始的key
+     * @param ops 要与通过 {@link #register0(SelectableChannel, int, GoThroughNIORunnable)}
+     *            注册的事件统一
+     * @throws IOException
+     */
+    public boolean reRegisterByKey0(SelectionKey key, int ops) {
+        Objects.requireNonNull(key, "key non null");
+
+        if (key.selector() != this.selector) {
+            log.warn("this SelectionKey [{}] is not belong GoThroughNioContainer's selector", key.toString());
+            return false;
+        }
+
+        if (!key.isValid()) {
+            return false;
+        }
+
+        // 通过事件和源码分析，恢复注册是通过updateKeys.addLast进行，虽然没有被阻塞，但是需要进行一次唤醒才可以成功恢复事件监听
+        // 因无法获知是否成功注入selector，所以必须要进行一次唤醒操作，并且没有阻塞的问题，所以这里不通过countWaitLatch进行同步
+        key.interestOps(ops);
+
+        try {
+            this.getWakeupSelector();
+        } catch (IOException e) {
+            // 出错了交给其他的流程逻辑，这里只进行一次唤醒
+        }
+
+        return true;
+    }
+
+    private void register0(SelectableChannel socketChannel, int ops, GoThroughNIORunnable runnable) throws IOException {
         Objects.requireNonNull(socketChannel, "socketChannel non null");
         try {
-            channelProcessNodeMap.put(socketChannel, ProcessNode.of(socketChannel, ops, runnable));
+            channelProcessNodeMap.put(socketChannel, NioProcessNode.of(socketChannel, ops, runnable));
             socketChannel.configureBlocking(false);
             countDownUpLatch.countUp();
             // 这里有个坑点，如果在select中，这里会被阻塞
@@ -148,7 +193,7 @@ public class GoThroughNioContainer {
             this.cancel = true;
         }
 
-        log.info("NioContainer cancel");
+        log.info("GoThroughNioContainer cancel");
 
         this.alive = false;
 
@@ -172,13 +217,17 @@ public class GoThroughNioContainer {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor(staticName = "of")
-    static class ProcessNode {
+    static class NioProcessNode {
 
         private SelectableChannel channel;
 
         private int interestOps;
 
-        private GoThroughRunnable runnable;
+        private GoThroughNIORunnable runnable;
+
+        public void process(SelectionKey key) {
+            runnable.process(key, interestOps, channel);
+        }
     }
 
     class ProcessThread extends Thread {
@@ -218,13 +267,13 @@ public class GoThroughNioContainer {
                         // do no thing
                     }
 
-                    ProcessNode processNode = channelProcessNodeMap.get(key.channel());
-                    if (Objects.isNull(processNode)) {
+                    NioProcessNode nioProcessNode = channelProcessNodeMap.get(key.channel());
+                    if (Objects.isNull(nioProcessNode)) {
                         key.cancel();
                         continue;
                     }
 
-                    executorService.execute(() -> processNode.getRunnable().process(key));
+                    executorService.execute(() -> nioProcessNode.process(key));
 
                 }
             }

@@ -1,8 +1,9 @@
 package com.future94.gothrough.server.thread;
 
 import com.future94.gothrough.common.utils.SocketUtils;
+import com.future94.gothrough.protocol.thread.AbstractNIORunnable;
 import com.future94.gothrough.protocol.thread.GoThroughNioContainer;
-import com.future94.gothrough.protocol.thread.GoThroughRunnable;
+import com.future94.gothrough.protocol.thread.GoThroughNIORunnable;
 import com.future94.gothrough.protocol.thread.GoThroughThreadFactory;
 import com.future94.gothrough.server.config.ServerConfig;
 import com.future94.gothrough.server.service.ServerService;
@@ -26,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author weilai
  */
 @Slf4j
-public class ServerThreadManager implements GoThroughRunnable {
+public class ServerThreadManager extends AbstractNIORunnable {
 
     private final ServerConfig config;
 
@@ -125,7 +126,7 @@ public class ServerThreadManager implements GoThroughRunnable {
     }
 
     @Override
-    public void process(SelectionKey key) {
+    public void doProcess(SelectionKey key) {
         if (!key.isValid()) {
             this.cancel();
         }

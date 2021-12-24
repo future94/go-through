@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class InteractiveClientConfig implements ClientConfig {
 
+    private static final boolean DEFAULT_NIO = true;
+
     private Boolean nio;
 
     private String serverIp;
@@ -21,7 +23,7 @@ public class InteractiveClientConfig implements ClientConfig {
     private Integer exposedIntranetPort;
 
     public InteractiveClientConfig() {
-        this(true);
+        this(DEFAULT_NIO);
     }
 
     public InteractiveClientConfig(Boolean nio) {

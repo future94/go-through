@@ -8,16 +8,24 @@ import lombok.Data;
 @Data
 public class InteractiveServerConfig implements ServerConfig {
 
+    private static final int DEFAULT_SERVER_PORT = 19507;
+
+    private static final boolean DEFAULT_NIO = true;
+
     private Integer serverPort;
 
     private Boolean nio;
 
     public InteractiveServerConfig() {
-        this(19507);
+        this(DEFAULT_SERVER_PORT);
+    }
+
+    public InteractiveServerConfig(boolean nio) {
+        this(DEFAULT_SERVER_PORT, nio);
     }
 
     public InteractiveServerConfig(Integer serverPort) {
-        this(serverPort, true);
+        this(serverPort, DEFAULT_NIO);
     }
 
     public InteractiveServerConfig(Integer serverPort, Boolean nio) {

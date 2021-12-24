@@ -3,8 +3,9 @@ package com.future94.gothrough.server.listen.thread;
 import com.future94.gothrough.common.utils.SequenceUtils;
 import com.future94.gothrough.common.utils.SocketUtils;
 import com.future94.gothrough.protocol.part.SocketPart;
+import com.future94.gothrough.protocol.thread.AbstractNIORunnable;
 import com.future94.gothrough.protocol.thread.GoThroughNioContainer;
-import com.future94.gothrough.protocol.thread.GoThroughRunnable;
+import com.future94.gothrough.protocol.thread.GoThroughNIORunnable;
 import com.future94.gothrough.protocol.thread.GoThroughThreadFactory;
 import com.future94.gothrough.protocol.thread.ThreadManager;
 import com.future94.gothrough.server.listen.cache.ServerListenThreadCache;
@@ -35,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author weilai
  */
 @Slf4j
-public class ServerListenThreadManager implements ThreadManager, GoThroughRunnable {
+public class ServerListenThreadManager extends AbstractNIORunnable implements ThreadManager {
 
     private AtomicBoolean isAlive = new AtomicBoolean(false);
 
@@ -270,7 +271,7 @@ public class ServerListenThreadManager implements ThreadManager, GoThroughRunnab
     }
 
     @Override
-    public void process(SelectionKey key) {
+    public void doProcess(SelectionKey key) {
         if (!key.isValid()) {
             this.cancel();
         }
