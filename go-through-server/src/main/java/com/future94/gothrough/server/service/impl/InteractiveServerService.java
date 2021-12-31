@@ -23,7 +23,7 @@ public class InteractiveServerService implements ServerService<InteractiveModel,
     }
 
     @Override
-    public GoThroughSocketChannel<InteractiveModel, InteractiveModel> createSocketChannel(Socket socket) throws IOException {
+    public GoThroughSocketChannel<InteractiveModel, InteractiveModel> createGoThroughSocketChannel(Socket socket) throws IOException {
         return new InteractiveChannel(socket);
     }
 }

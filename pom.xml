@@ -8,13 +8,44 @@
     <artifactId>go-through</artifactId>
     <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
+
+    <name>go-through</name>
+    <description>Lightweight high performance Intranet penetration tool.</description>
+    <url>https://github.com/future94/go-through</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://github.com/future94/go-through</url>
+        <connection>scm:git:https://github.com/future94/go-through.git</connection>
+        <developerConnection>scm:git:https://github.com/future94/go-through.git</developerConnection>
+        <tag>${project.version}</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/future94/go-through/issues</url>
+    </issueManagement>
+
+    <developers>
+        <developer>
+            <id>future94</id>
+            <name>wei lai</name>
+            <url>https://github.com/future94</url>
+        </developer>
+    </developers>
+
     <modules>
         <module>go-through-client</module>
         <module>go-through-server</module>
         <module>go-through-common</module>
         <module>go-through-protocol</module>
-<!--        <module>go-through-examples</module>-->
     </modules>
-
 
 </project>

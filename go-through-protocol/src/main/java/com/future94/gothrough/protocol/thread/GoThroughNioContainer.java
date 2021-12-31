@@ -255,11 +255,14 @@ public class GoThroughNioContainer {
                     log.error("NioHallows run exception", e);
                     continue;
                 }
-
                 Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
                 for (; iterator.hasNext(); ) {
                     SelectionKey key = iterator.next();
                     iterator.remove();
+
+                    if (!key.isValid()) {
+                        continue;
+                    }
 
                     try {
                         key.interestOps(0);

@@ -34,7 +34,7 @@ public class ReadAheadPassValueAdapter implements ClientSocketAdapter {
         // 建立交互通道
         GoThroughSocketChannel<InteractiveModel, InteractiveModel> goThroughSocketChannel;
         try {
-            goThroughSocketChannel = this.serverService.createSocketChannel(acceptClientSocket);
+            goThroughSocketChannel = this.serverService.createGoThroughSocketChannel(acceptClientSocket);
         } catch (Exception e) {
             log.error("创建socket通道异常", e);
             throw e;

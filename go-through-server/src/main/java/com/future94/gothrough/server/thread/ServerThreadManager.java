@@ -133,9 +133,9 @@ public class ServerThreadManager extends AbstractNIORunnable {
 
         try {
             ServerSocketChannel channel = (ServerSocketChannel) key.channel();
-            SocketChannel accept = channel.accept();
-            for (; Objects.nonNull(accept); accept = channel.accept()) {
-                this.processAcceptClientSocket(accept.socket());
+            SocketChannel socketChannel = channel.accept();
+            for (; Objects.nonNull(socketChannel); socketChannel = channel.accept()) {
+                this.processAcceptClientSocket(socketChannel.socket());
             }
         } catch (IOException e) {
             log.warn("客户端服务进程 轮询等待出现异常", e);

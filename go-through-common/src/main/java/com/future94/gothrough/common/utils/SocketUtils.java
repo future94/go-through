@@ -13,6 +13,12 @@ import java.nio.channels.spi.SelectorProvider;
  */
 public class SocketUtils {
 
+    public static SocketChannel createSocketChannel(String ip, Integer port) throws IOException {
+        SocketChannel openSocketChannel = SelectorProvider.provider().openSocketChannel();
+        openSocketChannel.connect(new InetSocketAddress(ip, port));
+        return openSocketChannel;
+    }
+
     public static Socket createSocket(String ip, Integer port) throws IOException {
         SocketChannel openSocketChannel = SelectorProvider.provider().openSocketChannel();
         openSocketChannel.connect(new InetSocketAddress(ip, port));

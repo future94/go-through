@@ -146,7 +146,7 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
 
     @Override
     public void doProcess(SelectionKey key) {
-        if (this.alive && key.isValid()) {
+        if (this.alive) {
             ByteBuffer buffer = this.obtainByteBuffer();
             SocketChannel inputChannel = (SocketChannel) key.channel();
             try {

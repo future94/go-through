@@ -13,6 +13,6 @@ public interface ServerService<R, W> {
 
     ClientSocketAdapter createClientSocketAdapter();
 
-    GoThroughSocketChannel<R, W> createSocketChannel(Socket socket) throws IOException;
+    GoThroughSocketChannel<R, W> createGoThroughSocketChannel(Socket socket) throws IOException;
 
 }

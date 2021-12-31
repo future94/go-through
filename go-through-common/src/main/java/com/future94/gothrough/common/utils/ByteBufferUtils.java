@@ -17,15 +17,25 @@ public class ByteBufferUtils {
         return sum;
     }
 
+    /**
+     * 将byte[]转换为int
+     * @param byteArr 要转化的byte[]
+     * @return {@code int}
+     */
     public static int bytesToInt(byte[] byteArr) {
         int count = 0;
         for (int i = 0; i < 4; ++i) {
             count <<= 8;
-            count |= byteArr[i] & 255;
+            count |= byteArr[i] & 0xFF;
         }
         return count;
     }
 
+    /**
+     * 将int转换为byte[]
+     * @param source 要转化的int
+     * @return {@code byte[]}
+     */
     public static byte[] intToBytes(int source) {
         return new byte[]{(byte) ((source >> 24) & 0xFF), (byte) ((source >> 16) & 0xFF),
                 (byte) ((source >> 8) & 0xFF), (byte) (source & 0xFF)};
