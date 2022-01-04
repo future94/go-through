@@ -38,7 +38,7 @@ public interface NioServer extends IServer{
      * 设置要写入的值
      * @param payload 具体的值
      */
-    void setWriteData(String payload);
+    void setWriteData(Object payload) throws Exception;
 
     /**
      * 设置要写入的值

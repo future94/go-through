@@ -2,6 +2,7 @@ package com.future94.gothrough.protocol.nio.buffer;
 
 import com.future94.gothrough.common.utils.ByteBufferUtils;
 import com.future94.gothrough.protocol.nio.thread.SelectorThread;
+import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -14,6 +15,7 @@ import java.util.concurrent.atomic.LongAdder;
  * @author weilai
  */
 @Slf4j
+@EqualsAndHashCode
 public class FrameBuffer {
 
     /**
@@ -80,6 +82,10 @@ public class FrameBuffer {
         this.buffer = ByteBuffer.allocate(4);
     }
 
+    /**
+     * 读取SocketChannel数据到Buffer中
+     * @return {@code true} 读取成功
+     */
     public boolean read() {
         // 准备读
         if (state == FrameBufferStateEnum.PREPARE_READ_FRAME) {
@@ -151,14 +157,12 @@ public class FrameBuffer {
 
     /**
      * 像缓冲区写入数据
-     *
-     * @param payload 要写入的字节数组
      * @return 是否写入成功
      */
-    public boolean write(byte[] payload) {
+    public boolean write() {
         if (this.state == FrameBufferStateEnum.WRITING_FRAME) {
             try {
-                if (ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(payload)) < 0) {
+                if (ByteBufferUtils.channelWrite(socketChannel, buffer) < 0) {
                     return false;
                 }
             } catch (IOException e) {
@@ -166,7 +170,8 @@ public class FrameBuffer {
                 return false;
             }
             if (buffer.remaining() == 0) {
-                setPrepareReadState();
+                state = FrameBufferStateEnum.WRITE_FRAME_COMPLETE;
+                processSelectInterestChange();
             }
             return true;
         }
@@ -177,7 +182,7 @@ public class FrameBuffer {
     /**
      * 清除
      */
-    public void clear() {
+    public void close() {
         if (state == FrameBufferStateEnum.READING_FRAME || state == FrameBufferStateEnum.READ_FRAME_COMPLETE) {
             readBufferBytesAllocated.add(-buffer.array().length);
         }
@@ -190,23 +195,66 @@ public class FrameBuffer {
 
     /**
      * 获取buffer中的数据
+     *
      * @return {@code byte[]}
      */
-    public byte[] readBufferBytes(){
+    public byte[] readBufferBytes() {
         return buffer.array();
     }
 
-    // TODO
-    public void responseReady() {
-        readBufferBytesAllocated.add(-buffer.array ().length );
-//        if (response_.len () == 0) {
-//            state_ = FrameBufferState.AWAITING_REGISTER_READ;
-//            buffer_ = null;
-//        } else {
-//            buffer_ = ByteBuffer.wrap ( response_.get (), 0, response_.len () );
-//
-//            state_ = FrameBufferState.AWAITING_REGISTER_WRITE;
-//        }
-//        requestSelectInterestChange ();
+    /**
+     * 回调要写入的业务将值存入buffer
+     * @return {@code true} 写入buffer成功
+     */
+    public boolean invoke() {
+        try {
+            Object write = selectorThread.getServerManager().getChannelWritableHandler().channelWrite();
+            selectorThread.getServerManager().setWriteData(write);
+            readBufferBytesAllocated.add(-buffer.array().length);
+            buffer = ByteBuffer.wrap(selectorThread.getServerManager().getWritePayload(), 0, selectorThread.getServerManager().getWritePayload().length);
+            state = FrameBufferStateEnum.WAITING_WRITE_FRAME;
+            // 注册SelectionKey.OP_WRITE事件
+            // 设置state为FrameBufferStateEnum.WRITING_FRAME
+            processSelectInterestChange();
+            return true;
+        } catch (ClassCastException ex) {
+            log.error("Got an Exception while encode() in selector thread [{}]!", this.selectorThread.getName(), ex);
+        } catch (Throwable t) {
+            log.error("Unexpected throwable while invoking!", t);
+        }
+        state = FrameBufferStateEnum.FRAME_COLSE;
+        // 调用close()
+        // 调用selectionKey.cancel();
+        processSelectInterestChange();
+        return false;
+    }
+
+    /**
+     * 处理SelectInterest更改
+     */
+    private void processSelectInterestChange() {
+        if (Thread.currentThread() == this.selectorThread) {
+            changeSelectInterests();
+        } else {
+            this.selectorThread.processSelectInterestChange(this);
+        }
+    }
+
+    /**
+     * 更改SelectInterest
+     */
+    public void changeSelectInterests() {
+        if (state == FrameBufferStateEnum.WAITING_WRITE_FRAME) {
+            // set the OP_WRITE interest
+            selectionKey.interestOps(SelectionKey.OP_WRITE);
+            state = FrameBufferStateEnum.WRITING_FRAME;
+        } else if (state == FrameBufferStateEnum.WRITE_FRAME_COMPLETE) {
+            setPrepareReadState();
+        } else if (state == FrameBufferStateEnum.FRAME_COLSE) {
+            this.close();
+            selectionKey.cancel();
+        } else {
+            log.error("changeSelectInterest was called, but state is invalid [{}]", state.name());
+        }
     }
 }

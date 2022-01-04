@@ -17,4 +17,12 @@ public interface Decoder<T> {
      * @throws Exception    解码失败
      */
     T decode(FrameBuffer buffer) throws Exception;
+
+    /**
+     * 对应各种解码操作
+     * @param payload       要解码的数据
+     * @return T            实际解码的数据
+     * @throws Exception    解码失败
+     */
+    T decode(byte[] payload) throws Exception;
 }

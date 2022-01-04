@@ -30,6 +30,24 @@ class ObjectCodecTest {
     }
 
     @Test
+    public void emptyEncoder() throws Exception {
+        ObjectEncoder objectEncoder = new ObjectEncoder();
+        byte[] encode = objectEncoder.encode("");
+        ObjectDecoder objectDecoder = new ObjectDecoder();
+        Object decode = objectDecoder.decode(encode);
+        System.out.println(decode);
+    }
+
+    @Test
+    public void nullEncoder() throws Exception {
+        ObjectEncoder objectEncoder = new ObjectEncoder();
+        byte[] encode = objectEncoder.encode(null);
+        ObjectDecoder objectDecoder = new ObjectDecoder();
+        Object decode = objectDecoder.decode(encode);
+        System.out.println(decode);
+    }
+
+    @Test
     public void objectEncoder() throws Exception {
         ObjectEncoder objectEncoder = new ObjectEncoder();
         byte[] encode = objectEncoder.encode(objectTest);

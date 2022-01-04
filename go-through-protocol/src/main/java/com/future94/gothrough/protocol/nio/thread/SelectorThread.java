@@ -4,6 +4,7 @@ import com.future94.gothrough.protocol.nio.buffer.FrameBuffer;
 import com.future94.gothrough.protocol.nio.handler.ChannelReadableHandler;
 import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -11,7 +12,9 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.SelectorProvider;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 
@@ -27,9 +30,12 @@ public class SelectorThread extends Thread {
      */
     private final Selector selector;
 
+    @Getter
     private final GoThroughNioServer serverManager;
 
     private final BlockingQueue<SocketChannel> queue = new LinkedBlockingDeque<>();
+
+    protected final Set<FrameBuffer> selectInterestChanges = new HashSet<>();
 
     public SelectorThread(GoThroughNioServer serverManager) throws IOException {
         this("Selector-Thread-Listen-" + serverManager.getPort(), serverManager);
@@ -79,6 +85,16 @@ public class SelectorThread extends Thread {
             }
             registerAccepted(socketChannel);
         }
+    }
+
+    /**
+     * 处理
+     */
+    public void processSelectInterestChange(FrameBuffer frameBuffer) {
+        synchronized (selectInterestChanges) {
+            selectInterestChanges.add(frameBuffer);
+        }
+        selector.wakeup();
     }
 
     @SuppressWarnings("all")
@@ -142,7 +158,32 @@ public class SelectorThread extends Thread {
             if (!doReadableHandler(buffer)) {
                 cleanupSelectionKey(selectionKey);
             }
+            if (!invokeWritable(selectionKey)) {
+                cleanupSelectionKey(selectionKey);
+            }
         }
+    }
+
+    /**
+     * 写事件处理
+     */
+    private void handleWrite(SelectionKey selectionKey) {
+        FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
+        if (!buffer.write()) {
+            cleanupSelectionKey(selectionKey);
+        }
+    }
+
+    /**
+     * 回调{@link com.future94.gothrough.protocol.nio.handler.ChannelWritableHandler}业务代码写入buffer
+     */
+    private boolean invokeWritable(SelectionKey selectionKey) {
+        FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
+        if (!buffer.invoke()) {
+            cleanupSelectionKey(selectionKey);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -171,26 +212,6 @@ public class SelectorThread extends Thread {
     }
 
     /**
-     * 写事件处理
-     */
-    private void handleWrite(SelectionKey selectionKey) {
-        FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
-        try {
-            Object write = serverManager.getChannelWritableHandler().channelWrite();
-            try {
-                // 如果写入失败
-                if (!serverManager.getEncoder().encode(write, buffer)) {
-                    cleanupSelectionKey(selectionKey);
-                }
-            } catch (ClassCastException ex) {
-                log.error("Got an Exception while encode() in selector thread [{}]!", super.getName(), ex);
-            }
-        } catch (Exception e) {
-            log.error("Got an Exception while doWritableHandler() in selector thread [{}]!", super.getName(), e);
-        }
-    }
-
-    /**
      * 清除掉操作操作失败的SelectionKey
      *
      * @param selectionKey 要清除的selectionKey
@@ -198,7 +219,7 @@ public class SelectorThread extends Thread {
     private void cleanupSelectionKey(SelectionKey selectionKey) {
         FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
         if (buffer != null) {
-            buffer.clear();
+            buffer.close();
         }
         selectionKey.cancel();
     }

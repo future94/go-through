@@ -15,7 +15,7 @@ import java.io.ObjectOutputStream;
 public class ObjectEncoder extends MessageToByteEncoder<Object> {
 
     @Override
-    public byte[] encode(Object msg) throws Exception {
+    public byte[] encoder(Object msg) throws Exception {
         ByteArrayOutputStream bout = new ByteArrayOutputStream();
         ObjectOutputStream oout = null;
         try {

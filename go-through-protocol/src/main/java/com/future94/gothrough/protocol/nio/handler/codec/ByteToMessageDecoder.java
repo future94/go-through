@@ -13,12 +13,4 @@ public abstract class ByteToMessageDecoder<T> implements Decoder<T> {
         byte[] bytes = buffer.readBufferBytes();
         return decode(bytes);
     }
-
-    /**
-     * 对应各种解码操作
-     * @param payload       要解码的数据
-     * @return T            实际解码的数据
-     * @throws Exception    解码失败
-     */
-    protected abstract T decode(byte[] payload) throws Exception;
 }

@@ -15,7 +15,7 @@ import java.io.ObjectInputStream;
 public class ObjectDecoder extends ByteToMessageDecoder<Object> {
 
     @Override
-    protected Object decode(byte[] payload) throws Exception {
+    public Object decode(byte[] payload) throws Exception {
         ByteArrayInputStream byteArrayInputStream = null;
         ObjectInputStream objectInputStream = null;
         try {

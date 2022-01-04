@@ -14,7 +14,6 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -114,8 +113,8 @@ public class GoThroughNioServer implements NioServer {
     }
 
     @Override
-    public void setWriteData(String payload) {
-        this.setWriteData(payload.getBytes(StandardCharsets.UTF_8));
+    public void setWriteData(Object payload) throws Exception {
+        this.setWriteData(this.getEncoder().encode(payload));
     }
 
     @Override
@@ -185,6 +184,9 @@ public class GoThroughNioServer implements NioServer {
         this.channelWritableHandler = channelWritableHandler;
     }
 
+    /**
+     * 轮询选择一个{@link SelectorThread}.
+     */
     public SelectorThread chooseSelectorThread() {
         Iterator<SelectorThread> iterator = this.selectorThreadLoadBalancer;
         if (!iterator.hasNext()) {
