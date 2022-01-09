@@ -21,9 +21,10 @@ public enum InteractiveTypeEnum {
 
     SERVER_WAIT_CLIENT("需求客户端建立连接"),
 
+    CLIENT_CONTROL("客户端请求建立连接"),
+
     CLIENT_CONNECT("客户端建立通道连接"),
 
-    CLIENT_CONTROL("客户端请求建立连接"),
     ;
 
     private String desc;

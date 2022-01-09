@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
@@ -21,9 +21,9 @@ public abstract class BaseSocketPart implements SocketPart {
 
     protected String socketPartKey;
 
-    protected Socket recvSocket;
+    protected SocketChannel recvSocket;
 
-    protected Socket sendSocket;
+    protected SocketChannel sendSocket;
 
     private final LocalDateTime createTime;
 

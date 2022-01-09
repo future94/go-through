@@ -1,5 +1,6 @@
 package com.future94.gothrough.protocol.nio.server;
 
+import com.future94.gothrough.common.utils.ByteBufferUtils;
 import com.future94.gothrough.protocol.nio.handler.AcceptHandler;
 import com.future94.gothrough.protocol.nio.handler.ChannelReadableHandler;
 import com.future94.gothrough.protocol.nio.handler.ChannelWritableHandler;
@@ -14,6 +15,8 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -91,9 +94,6 @@ public class GoThroughNioServer implements NioServer {
      */
     private int selectorThreadCount = 1 << 2;
 
-    @Getter
-    private byte[] writePayload;
-
     @Override
     public Integer getPort() {
         return this.port;
@@ -110,16 +110,6 @@ public class GoThroughNioServer implements NioServer {
             throw new IllegalArgumentException("selectorThreadCount must be greater than 0.");
         }
         this.selectorThreadCount = selectorThreadCount;
-    }
-
-    @Override
-    public void setWriteData(Object payload) throws Exception {
-        this.setWriteData(this.getEncoder().encode(payload));
-    }
-
-    @Override
-    public void setWriteData(byte[] payload) {
-        this.writePayload = payload;
     }
 
     @Override
@@ -182,6 +172,30 @@ public class GoThroughNioServer implements NioServer {
     @Override
     public void setWritableHandler(ChannelWritableHandler channelWritableHandler) {
         this.channelWritableHandler = channelWritableHandler;
+    }
+
+    @Override
+    public void writeChannel(SocketChannel socketChannel, Object msg) throws Exception {
+        byte[] encode = this.getEncoder().encode(msg);
+        int writeByte;
+        writeByte = ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(ByteBufferUtils.intToBytes(encode.length)));
+        if (writeByte == 0 && log.isWarnEnabled()) {
+            log.warn("写入管道数据为0字节");
+        }
+        writeByte = ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(encode));
+        if (writeByte == 0 && log.isWarnEnabled()) {
+            log.warn("写入管道数据为0字节");
+        }
+    }
+
+    @Override
+    public Object readChannel(SocketChannel socketChannel) throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(4);
+        socketChannel.read(byteBuffer);
+        int frameSize = byteBuffer.getInt(0);
+        byteBuffer = ByteBuffer.allocate(frameSize);
+        socketChannel.read(byteBuffer);
+        return this.getDecoder().decode(byteBuffer.array());
     }
 
     /**

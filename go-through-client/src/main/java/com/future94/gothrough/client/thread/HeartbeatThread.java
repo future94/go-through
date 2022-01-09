@@ -73,7 +73,7 @@ public class HeartbeatThread implements Heartbeat, Runnable {
 
     @Override
     public void run() {
-        if (this.clientThread.isCancelled() || !this.isAlive()) {
+        if (this.clientThread.isCancel() || !this.isAlive()) {
             this.cancel();
         }
         log.debug("开始发送心跳数据到[{}:{}]", this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort());
@@ -83,7 +83,8 @@ public class HeartbeatThread implements Heartbeat, Runnable {
             return;
         } catch (Exception e) {
             log.warn("发送心跳数据到[{}:{}]异常", this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort());
-            this.clientThread.stopClient();
+            // FIXME: 发送心跳数据异常调用cannel后不会重试
+            this.clientThread.cancel();
         }
         if (!this.isAlive.get()) {
             log.warn("发送心跳数据异常，但是心跳线程已经停止");

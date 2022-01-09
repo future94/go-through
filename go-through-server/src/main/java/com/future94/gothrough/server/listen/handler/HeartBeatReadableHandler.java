@@ -10,7 +10,7 @@ import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext
  * 处理{@link InteractiveTypeEnum#HEART_BEAT}消息
  * @author weilai
  */
-public class HeartBeatHandler extends SimpleChannelReadableHandler<InteractiveModel>{
+public class HeartBeatReadableHandler extends SimpleChannelReadableHandler<InteractiveModel>{
 
     @Override
     protected boolean support(InteractiveModel msg) {

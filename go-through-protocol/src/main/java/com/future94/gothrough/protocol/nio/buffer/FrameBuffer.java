@@ -1,6 +1,7 @@
 package com.future94.gothrough.protocol.nio.buffer;
 
 import com.future94.gothrough.common.utils.ByteBufferUtils;
+import com.future94.gothrough.protocol.nio.handler.ChannelWritableHandler;
 import com.future94.gothrough.protocol.nio.thread.SelectorThread;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -154,6 +155,32 @@ public class FrameBuffer {
         return state == FrameBufferStateEnum.READ_FRAME_COMPLETE;
     }
 
+    /**
+     * 将数据写入buffer
+     * @param msg           要写入的数据
+     * @return {@code true} 写入buffer成功
+     */
+    public boolean writeBuffer(Object msg) {
+        try {
+            byte[] encode = selectorThread.getServerManager().getEncoder().encode(msg);
+            readBufferBytesAllocated.add(-buffer.array().length);
+            buffer = ByteBuffer.wrap(encode, 0, encode.length);
+            state = FrameBufferStateEnum.WAITING_WRITE_FRAME;
+            // 注册SelectionKey.OP_WRITE事件
+            // 设置state为FrameBufferStateEnum.WRITING_FRAME
+            processSelectInterestChange();
+            return true;
+        } catch (ClassCastException ex) {
+            log.error("Got an Exception while encode() in selector thread [{}]!", this.selectorThread.getName(), ex);
+        } catch (Throwable t) {
+            log.error("Unexpected throwable while invoking!", t);
+        }
+        state = FrameBufferStateEnum.FRAME_COLSE;
+        // 调用close()
+        // 调用selectionKey.cancel();
+        processSelectInterestChange();
+        return false;
+    }
 
     /**
      * 像缓冲区写入数据
@@ -162,6 +189,9 @@ public class FrameBuffer {
     public boolean write() {
         if (this.state == FrameBufferStateEnum.WRITING_FRAME) {
             try {
+                if (ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(ByteBufferUtils.intToBytes(buffer.array().length))) < 0) {
+                    return false;
+                }
                 if (ByteBufferUtils.channelWrite(socketChannel, buffer) < 0) {
                     return false;
                 }
@@ -208,25 +238,15 @@ public class FrameBuffer {
      */
     public boolean invoke() {
         try {
-            Object write = selectorThread.getServerManager().getChannelWritableHandler().channelWrite();
-            selectorThread.getServerManager().setWriteData(write);
-            readBufferBytesAllocated.add(-buffer.array().length);
-            buffer = ByteBuffer.wrap(selectorThread.getServerManager().getWritePayload(), 0, selectorThread.getServerManager().getWritePayload().length);
-            state = FrameBufferStateEnum.WAITING_WRITE_FRAME;
-            // 注册SelectionKey.OP_WRITE事件
-            // 设置state为FrameBufferStateEnum.WRITING_FRAME
-            processSelectInterestChange();
+            ChannelWritableHandler channelWritableHandler = selectorThread.getServerManager().getChannelWritableHandler();
+            if (channelWritableHandler != null) {
+                return writeBuffer(channelWritableHandler.channelWrite());
+            }
             return true;
-        } catch (ClassCastException ex) {
-            log.error("Got an Exception while encode() in selector thread [{}]!", this.selectorThread.getName(), ex);
-        } catch (Throwable t) {
-            log.error("Unexpected throwable while invoking!", t);
+        } catch (Exception e) {
+            log.error("call channelWritableHandler error", e);
+            return false;
         }
-        state = FrameBufferStateEnum.FRAME_COLSE;
-        // 调用close()
-        // 调用selectionKey.cancel();
-        processSelectInterestChange();
-        return false;
     }
 
     /**

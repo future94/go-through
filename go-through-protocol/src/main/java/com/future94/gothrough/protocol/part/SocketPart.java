@@ -1,23 +1,24 @@
 package com.future94.gothrough.protocol.part;
 
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 
 /**
+ * 相互交互的Socket组件
  * @author weilai
  */
 public interface SocketPart {
 
     String getSocketPartKey();
 
-    Socket getRecvSocket();
-
-    Socket getSendSocket();
-
     void setSocketPartKey(String socketPartKey);
 
-    void setRecvSocket(Socket recvSocket);
+    SocketChannel getRecvSocket();
 
-    void setSendSocket(Socket sendSocket);
+    void setRecvSocket(SocketChannel recvSocket);
+
+    SocketChannel getSendSocket();
+
+    void setSendSocket(SocketChannel sendSocket);
 
     void cancel();
 

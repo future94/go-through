@@ -35,7 +35,7 @@ class GoThroughNioServerTest {
 
     @Test
     public void clientConnect() throws Exception {
-        SocketChannel socketChannel = SocketUtils.createSocketChannel("127.0.0.1", 10010);
+        SocketChannel socketChannel = SocketUtils.createSocketChannel("127.0.0.1", 10010, false);
         socketChannel.configureBlocking(false);
         Selector selector = SelectorProvider.provider().openSelector();
         socketChannel.register(selector, SelectionKey.OP_READ);

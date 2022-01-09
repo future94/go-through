@@ -1,17 +1,30 @@
 package com.future94.gothrough.client.thread;
 
-import com.future94.gothrough.client.adapter.ClientAdapter;
+import com.future94.gothrough.client.cache.ClientThreadCache;
 import com.future94.gothrough.client.config.ClientConfig;
-import com.future94.gothrough.client.service.ClientService;
-import com.future94.gothrough.client.service.impl.InteractiveClientService;
+import com.future94.gothrough.client.handler.CommonReplyChannelReadableHandler;
+import com.future94.gothrough.client.handler.HeartBeatChannelReadableHandler;
+import com.future94.gothrough.client.handler.ServerWaitClientChannelReadableHandler;
+import com.future94.gothrough.common.enums.InteractiveTypeEnum;
+import com.future94.gothrough.common.utils.SocketUtils;
+import com.future94.gothrough.protocol.model.InteractiveModel;
+import com.future94.gothrough.protocol.model.dto.ClientControlDTO;
+import com.future94.gothrough.protocol.model.dto.InteractiveResultDTO;
+import com.future94.gothrough.protocol.model.dto.ServerWaitClientDTO;
+import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
+import com.future94.gothrough.protocol.nio.server.NioServer;
+import com.future94.gothrough.protocol.part.InteractiveSocketPart;
 import com.future94.gothrough.protocol.part.SocketPart;
 import com.future94.gothrough.protocol.thread.ThreadManager;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author weilai
@@ -19,35 +32,37 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class ClientThreadManager implements ThreadManager {
 
-    private AtomicBoolean isAlive = new AtomicBoolean(false);
+    @Getter
+    private volatile boolean isAlive = false;
 
-    private AtomicBoolean isCancel = new AtomicBoolean(false);
+    @Getter
+    private volatile boolean isCancel = false;
 
-    private volatile Heartbeat heartbeatThread;
+    private ClientConfig config;
 
-    private volatile WaiMessageThread waiMessageThread;
+    private Heartbeat heartbeatThread;
 
-    private volatile ClientConfig config;
+    private volatile SocketChannel serverSocketChannel;
 
-    private volatile ClientService<?, ?> clientService;
+    private final Object lock = new Object();
 
-    private volatile ClientAdapter<?, ?> clientAdapter;
+    private final NioServer server;
 
-    private final Map<String, SocketPart> socketPartMap = new ConcurrentHashMap<>();
+    private final Map<String, SocketPart> socketPartCache = new ConcurrentHashMap<>();
 
     public ClientThreadManager(ClientConfig config) {
         this.config = config;
+        GoThroughNioServer nioServer = new GoThroughNioServer();
+        nioServer.setPort(config.getServerPort());
+        nioServer.setReadableHandler(new CommonReplyChannelReadableHandler());
+        nioServer.setReadableHandler(new HeartBeatChannelReadableHandler());
+        nioServer.setReadableHandler(new ServerWaitClientChannelReadableHandler());
+        this.server = nioServer;
+        ClientThreadCache.add(this);
     }
 
     public boolean start() throws Exception {
-        this.clientService = new InteractiveClientService();
-
-        if (this.clientAdapter == null) {
-            this.clientAdapter = this.clientService.createControlAdapter(this);
-        }
-
-        boolean flag = this.clientAdapter.createControlChannel();
-
+        boolean flag = createControlChannel();
         if (!flag) {
             return false;
         }
@@ -56,134 +71,164 @@ public class ClientThreadManager implements ThreadManager {
     }
 
     private void start0() {
-        if (!this.isAlive.compareAndSet(false, true)) {
+        if (this.isAlive) {
             log.warn("已经启动过了");
             return;
         }
-
-        Heartbeat heartbeatThread = this.heartbeatThread;
-        if (Objects.isNull(heartbeatThread) || !heartbeatThread.isAlive()) {
-            heartbeatThread = this.heartbeatThread = this.clientService.createHeartbeatThread(this);
-            if (Objects.nonNull(heartbeatThread)) {
-                heartbeatThread.start();
-            }
+        if (Objects.isNull(this.heartbeatThread) || !this.heartbeatThread.isAlive()) {
+            HeartbeatThread heartbeatThread = new HeartbeatThread(this);
+            heartbeatThread.setHeartIntervalSeconds(10);
+            heartbeatThread.setMaxRetryConnectCount(10);
+            heartbeatThread.start();
+            this.heartbeatThread = heartbeatThread;
         }
-
-        if (Objects.isNull(this.waiMessageThread) || !this.waiMessageThread.isAlive()) {
-            this.waiMessageThread = new WaiMessageThread();
-            this.waiMessageThread.start();
-        }
+        this.isAlive = true;
     }
 
-    public void stopClient() {
-        if (!this.isAlive.compareAndSet(true, false)) {
-            log.warn("已经停止过了");
+    public void cancel() {
+        if (this.isCancel) {
+            log.warn("已经取消过了");
             return;
         }
-        WaiMessageThread waiMessageThread = this.waiMessageThread;
-        if (waiMessageThread != null) {
-            this.waiMessageThread = null;
-            waiMessageThread.interrupt();
+
+        if (this.heartbeatThread != null) {
+            this.heartbeatThread.cancel();
+            this.heartbeatThread = null;
         }
-        ClientAdapter<?, ?> clientAdapter = this.clientAdapter;
-        if (Objects.nonNull(clientAdapter)) {
-            try {
-                clientAdapter.close();
-            } catch (Exception e) {
-                log.error("client adapter close error", e);
-            }
+
+        Iterator<SocketPart> iterator = this.socketPartCache.values().iterator();
+        if (iterator.hasNext()) {
+            SocketPart socketPart = iterator.next();
+            iterator.remove();
+            socketPart.cancel();
         }
+        this.socketPartCache.clear();
+        this.isCancel = true;
     }
 
     public void sendHeartbeatTest() throws Exception {
-        this.clientAdapter.sendHeartbeatTest();
+        server.writeChannel(getServerSocketChannel(), InteractiveModel.of(InteractiveTypeEnum.HEART_BEAT, null));
     }
 
-    public boolean isCancelled() {
-        return isCancel.get();
+    public SocketChannel getServerSocketChannel() throws IOException{
+        if (this.serverSocketChannel == null) {
+            synchronized (this.lock) {
+                if (this.serverSocketChannel == null) {
+                    String serverIp = this.config.getServerIp();
+                    Integer serverPort = this.config.getServerPort();
+                    try {
+                        this.serverSocketChannel = SocketUtils.createSocketChannel(serverIp, serverPort, true);
+                    } catch (IOException e) {
+                        log.error("向服务端[{}:{}]建立控制通道失败", serverIp, serverPort, e);
+                        throw e;
+                    }
+                }
+            }
+        }
+        return this.serverSocketChannel;
     }
 
-    public String getServerIp() {
-        return this.config.getServerIp();
+    private boolean createControlChannel() {
+        String serverIp = this.config.getServerIp();
+        Integer serverPort = this.config.getServerPort();
+        Integer serverExposedListenPort = this.config.getServerExposedListenPort();
+        try {
+            server.writeChannel(getServerSocketChannel(), InteractiveModel.of(InteractiveTypeEnum.CLIENT_CONTROL,
+                    ClientControlDTO.builder().serverExposedListenPort(serverExposedListenPort).build()));
+        } catch (Exception e) {
+            log.error("向服务端[{}:{}]发送CLIENT_CONTROL消息失败", serverIp, serverPort, e);
+            try {
+                getServerSocketChannel().close();
+            } catch (IOException ex) {
+                log.warn("向服务端[{}:{}]发送CLIENT_CONTROL消息失败, 关闭socketChannel发生异常", serverIp, serverPort, e);
+            }
+            return false;
+        }
+        try {
+            InteractiveModel recv = (InteractiveModel) server.readChannel(getServerSocketChannel());
+            log.debug("建立控制端口回复：{}", recv);
+            InteractiveResultDTO resultDTO = recv.getData().convert(InteractiveResultDTO.class);
+            if (!resultDTO.isSuccess()) {
+                log.error("服务端控制端口失败");
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("处理服务端[{}:{}]发送建立控制端口回复消息失败", serverIp, serverPort, e);
+            try {
+                getServerSocketChannel().close();
+            } catch (IOException ex) {
+                log.warn("处理服务端[{}:{}]发送建立控制端口回复消息失败, 关闭socketChannel发生异常", serverIp, serverPort, e);
+            }
+            return false;
+        }
     }
 
-    public Integer getServerPort() {
-        return this.config.getServerPort();
-    }
-
-    @Override
-    public Boolean getNio() {
-        return this.config.getNio();
+    public boolean createConnect(ServerWaitClientDTO dto) {
+        String serverIp = this.config.getServerIp();
+        Integer serverPort = this.config.getServerPort();
+        String exposedIntranetIp = this.config.getExposedIntranetIp();
+        Integer exposedIntranetPort = this.config.getExposedIntranetPort();
+        // 首先向暴露目标建立socket
+        SocketChannel exposedSocketChannel;
+        try {
+            exposedSocketChannel = SocketUtils.createSocketChannel(exposedIntranetIp, exposedIntranetPort, false);
+        } catch (IOException e) {
+            log.error("向暴露目标[{}:{}]建立连接失败", exposedIntranetIp, exposedIntranetPort);
+            return false;
+        }
+        try {
+            // 向服务端请求建立隧道
+            server.writeChannel(getServerSocketChannel(), InteractiveModel.of(InteractiveTypeEnum.CLIENT_CONNECT, dto));
+        } catch (Exception e) {
+            log.error("向服务端[{}:{}]发送CLIENT_CONNECT消息失败", serverIp, serverPort, e);
+            return false;
+        }
+        try {
+            InteractiveModel recv = (InteractiveModel) server.readChannel(getServerSocketChannel());
+            log.debug("建立隧道回复：{}", recv);
+            InteractiveResultDTO resultDTO = recv.getData().convert(InteractiveResultDTO.class);
+            if (!resultDTO.isSuccess()) {
+                log.error("服务端绑定链接失败, 要暴露[{}:{}]", exposedIntranetIp, exposedIntranetPort);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("打通隧道[{}:{} <===> {}:{}]发生异常 ", serverIp, serverPort, exposedIntranetIp, exposedIntranetPort, e);
+            try {
+                exposedSocketChannel.close();
+            } catch (IOException ex) {
+                log.warn("关闭要暴露[{}:{}]的Socket发生异常", exposedIntranetIp, exposedIntranetPort, ex);
+            }
+            try {
+                getServerSocketChannel().close();
+            } catch (IOException ex) {
+                log.warn("关闭要暴露[{}:{}]的SocketChannel发生异常", exposedIntranetIp, exposedIntranetPort, ex);
+            }
+            return false;
+        }
+        try {
+            SocketPart socketPart = new InteractiveSocketPart(this);
+            socketPart.setSocketPartKey(dto.getSocketPartKey());
+            socketPart.setSendSocket(getServerSocketChannel());
+            socketPart.setRecvSocket(exposedSocketChannel);
+            boolean passWayStatus = socketPart.createPassWay();
+            if (!passWayStatus) {
+                log.error("尝试打通隧道失败, socketPartKey:[{}]", dto.getSocketPartKey());
+                socketPart.cancel();
+                return false;
+            }
+            this.socketPartCache.put(dto.getSocketPartKey(), socketPart);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     public Integer getServerExposedListenPort() {
         return this.config.getServerExposedListenPort();
     }
 
-    public String getExposedIntranetIp() {
-        return this.config.getExposedIntranetIp();
-    }
-
-    public Integer getExposedIntranetPort() {
-        return this.config.getExposedIntranetPort();
-    }
-
-    public void cancel() {
-        if (!this.isCancel.compareAndSet(false, true)) {
-            log.warn("已经取消过了");
-            return;
-        }
-
-        this.stopClient();
-
-        if (this.heartbeatThread != null) {
-            this.heartbeatThread = null;
-        }
-
-        ClientAdapter<?, ?> clientAdapter;
-        if ((clientAdapter = this.clientAdapter) != null) {
-            this.clientAdapter = null;
-            try {
-                clientAdapter.close();
-            } catch (Exception e) {
-                // do no thing
-            }
-        }
-
-        String[] array = this.socketPartMap.keySet().toArray(new String[0]);
-
-        for (String key : array) {
-            this.stopSocketPart(key);
-        }
-    }
-
-    @Override
-    public void stopSocketPart(String socketPartKey) {
-        SocketPart socketPart = this.socketPartMap.remove(socketPartKey);
-        if (socketPart == null) {
-            return;
-        }
-        socketPart.cancel();
-    }
-
-    public void addSocketPart(String socketPartKey, SocketPart socketPart) {
-        this.socketPartMap.put(socketPartKey, socketPart);
-    }
-
-    class WaiMessageThread extends Thread {
-
-        @Override
-        public void run() {
-            while (isAlive.get()) {
-                try {
-                    clientAdapter.waitMessage();
-                } catch (Exception e) {
-                    log.warn("client control [{}] to server is exception,will stopClient",
-                            config.getServerExposedListenPort());
-                    stopClient();
-                }
-            }
-        }
-
+    public String getServerIp() {
+        return this.config.getServerIp();
     }
 }

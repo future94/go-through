@@ -1,32 +1,26 @@
 package com.future94.gothrough.client.handler;
 
-import com.future94.gothrough.client.adapter.ClientAdapter;
 import com.future94.gothrough.common.enums.InteractiveTypeEnum;
 import com.future94.gothrough.protocol.model.InteractiveModel;
+import com.future94.gothrough.protocol.nio.handler.SimpleChannelReadableHandler;
+import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
 
 /**
+ * 处理{@link InteractiveTypeEnum#COMMON_REPLY}消息
+ *
  * @author weilai
  */
-public class CommonReplyHandler implements ClientHandler<InteractiveModel, InteractiveModel> {
+public class CommonReplyChannelReadableHandler extends SimpleChannelReadableHandler<InteractiveModel> {
 
-    private static final CommonReplyHandler INSTANCE = new CommonReplyHandler();
-
-    private CommonReplyHandler() {
-    }
-
-    public static CommonReplyHandler getInstance() {
-        return INSTANCE;
+    @Override
+    protected boolean support(InteractiveModel msg) {
+        InteractiveTypeEnum interactiveTypeEnum = InteractiveTypeEnum
+                .getEnumByName(msg.getInteractiveType());
+        return InteractiveTypeEnum.COMMON_REPLY.equals(interactiveTypeEnum);
     }
 
     @Override
-    public boolean process(InteractiveModel model, ClientAdapter<InteractiveModel, InteractiveModel> clientAdapter) throws Exception {
-        InteractiveTypeEnum interactiveTypeEnum = InteractiveTypeEnum.getEnumByName(model.getInteractiveType());
-        if (!InteractiveTypeEnum.COMMON_REPLY.equals(interactiveTypeEnum)) {
-            return false;
-        }
-        // TODO
-        return true;
+    protected void channelRead0(ChannelHandlerContext ctx, InteractiveModel msg) {
+
     }
-
-
 }

@@ -80,7 +80,6 @@ public class AcceptThread extends Thread {
                 }
                 // Accept事件准备就绪
                 if (selectionKey.isAcceptable()) {
-                    doAcceptHandler(selectionKey);
                     handleAccept(selectionKey);
                 } else {
                     // 在AcceptThread中select方法出现意外状态
@@ -114,6 +113,7 @@ public class AcceptThread extends Thread {
             SocketChannel socketChannel = serverSocketChannel.accept();
             SelectorThread selectorThread = serverManager.chooseSelectorThread();
             selectorThread.addQueue(socketChannel);
+            doAcceptHandler(selectionKey);
         } catch (IOException e) {
             log.error("Got an IOException while handleAccept() in accept thread [{}]!", super.getName(), e);
         }

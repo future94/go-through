@@ -83,25 +83,17 @@ public class InteractiveSocketPart extends BaseSocketPart implements ThreadManag
             this.inToOutPassWay.start();
         } catch (Exception e) {
             log.error("socketPart [" + this.socketPartKey + "] 隧道建立异常", e);
-            this.exit();
+            this.cancel();
             return false;
         }
         return true;
-    }
-
-    private void exit() {
-        this.cancel();
-        if (this.threadManager != null) {
-            threadManager.stopSocketPart(this.socketPartKey);
-            threadManager = null;
-        }
     }
 
     @Override
     public void noticeStopPassWay() {
         this.countDownLatch.countDown();
         if (this.countDownLatch.getCount() <= 0) {
-            this.exit();
+            this.cancel();
         }
     }
 }

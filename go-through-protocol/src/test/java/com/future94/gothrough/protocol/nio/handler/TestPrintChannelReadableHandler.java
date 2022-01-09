@@ -1,5 +1,7 @@
 package com.future94.gothrough.protocol.nio.handler;
 
+import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
+
 /**
  * 打印接到的数据
  * @author weilai
@@ -7,7 +9,12 @@ package com.future94.gothrough.protocol.nio.handler;
 public class TestPrintChannelReadableHandler extends SimpleChannelReadableHandler<String> {
 
     @Override
-    protected void channelRead0(String msg) {
+    protected boolean support(String msg) {
+        return true;
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx, String msg) {
         System.out.println(msg);
     }
 }

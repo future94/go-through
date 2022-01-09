@@ -9,7 +9,7 @@ import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext
  * 处理{@link InteractiveTypeEnum#COMMON_REPLY}消息
  * @author weilai
  */
-public class CommonReplyHandler extends SimpleChannelReadableHandler<InteractiveModel>{
+public class CommonReplyReadableHandler extends SimpleChannelReadableHandler<InteractiveModel>{
 
     @Override
     protected boolean support(InteractiveModel msg) {

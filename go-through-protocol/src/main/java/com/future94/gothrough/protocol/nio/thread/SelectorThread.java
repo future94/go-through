@@ -2,6 +2,7 @@ package com.future94.gothrough.protocol.nio.thread;
 
 import com.future94.gothrough.protocol.nio.buffer.FrameBuffer;
 import com.future94.gothrough.protocol.nio.handler.ChannelReadableHandler;
+import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
 import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -155,7 +156,7 @@ public class SelectorThread extends Thread {
             return;
         }
         if (buffer.isReadCompleted()) {
-            if (!doReadableHandler(buffer)) {
+            if (!doReadableHandler(selectionKey)) {
                 cleanupSelectionKey(selectionKey);
             }
             if (!invokeWritable(selectionKey)) {
@@ -189,16 +190,28 @@ public class SelectorThread extends Thread {
     /**
      * 回调{@link ChannelReadableHandler}处理器
      *
-     * @param buffer 已经读取好数据的buffer
+     * @param selectionKey 已经读取好数据的buffer
      * @return {@code true} 回调成功
      */
-    private boolean doReadableHandler(FrameBuffer buffer) {
+    private boolean doReadableHandler(SelectionKey selectionKey) {
+        FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
+        SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
         try {
+            ChannelHandlerContext ctx = new ChannelHandlerContext(buffer, socketChannel);
             for (ChannelReadableHandler channelReadableHandler : serverManager.getChannelReadableHandlers()) {
+                Object decode = serverManager.getDecoder().decode(buffer);
+                if (!channelReadableHandler.supports(decode)) {
+                    continue;
+                }
                 try {
-                    channelReadableHandler.channelRead(serverManager.getDecoder().decode(buffer));
+                    if (log.isDebugEnabled()) {
+                        log.debug("selector thread [{}] recv message :[{}]", super.getName(), decode.toString());
+                    }
+                    channelReadableHandler.channelRead(ctx, decode);
                 } catch (ClassCastException e) {
-                    log.warn("Got an ClassCastException while channelRead() in selector thread [{}]!", super.getName(), e);
+                    if (log.isWarnEnabled()) {
+                        log.warn("Got an ClassCastException while channelRead() in selector thread [{}]!", super.getName(), e);
+                    }
                 } catch (Exception e) {
                     log.error("Got an Exception while channelRead() in selector thread [{}]!", super.getName(), e);
                     return false;

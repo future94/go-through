@@ -9,6 +9,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
+import java.io.Serializable;
+
 /**
  * @author weilai
  */
@@ -16,7 +18,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class InteractiveModel {
+public class InteractiveModel implements Serializable {
 
     /**
      * 交互序列，用于异步通信
@@ -42,7 +44,7 @@ public class InteractiveModel {
     }
 
     @ToString
-    public static class Data {
+    public static class Data implements Serializable{
 
         private String data;
 

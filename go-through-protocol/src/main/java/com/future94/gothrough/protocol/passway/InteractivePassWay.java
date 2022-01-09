@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
@@ -44,9 +43,9 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
     private int streamCacheSize;
 
     @Setter
-    private Socket recvSocket;
+    private SocketChannel recvSocket;
     @Setter
-    private Socket sendSocket;
+    private SocketChannel sendSocket;
 
     private OutputStream outputStream;
 
@@ -56,11 +55,11 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
 
     }
 
-    public InteractivePassWay(ThreadManager threadManager, Socket recvSocket, Socket sendSocket) {
+    public InteractivePassWay(ThreadManager threadManager, SocketChannel recvSocket, SocketChannel sendSocket) {
         this(threadManager, recvSocket, sendSocket, 1 << 12);
     }
 
-    public InteractivePassWay(ThreadManager threadManager, Socket recvSocket, Socket sendSocket, int streamCacheSize) {
+    public InteractivePassWay(ThreadManager threadManager, SocketChannel recvSocket, SocketChannel sendSocket, int streamCacheSize) {
         this.threadManager = threadManager;
         this.recvSocket = recvSocket;
         this.sendSocket = sendSocket;
@@ -71,14 +70,14 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
 
     private synchronized OutputStream getOutputStream() throws IOException {
         if (Objects.isNull(this.outputStream)) {
-            this.outputStream = this.sendSocket.getOutputStream();
+            this.outputStream = this.sendSocket.socket().getOutputStream();
         }
         return this.outputStream;
     }
 
     private synchronized SocketChannel getOutputChannel() {
         if (Objects.isNull(this.outputChannel)) {
-            this.outputChannel = this.sendSocket.getChannel();
+            this.outputChannel = this.sendSocket;
         }
         return this.outputChannel;
     }
@@ -108,7 +107,7 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
     @Override
     public void run() {
         try {
-            InputStream inputStream = this.recvSocket.getInputStream();
+            InputStream inputStream = this.recvSocket.socket().getInputStream();
             int len;
             byte[] arrayTemp = new byte[this.streamCacheSize];
             while (this.alive && (len = inputStream.read(arrayTemp)) > 0) {
@@ -192,12 +191,12 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
         this.alive = false;
 
         if (!threadManager.getNio()) {
-            GoThroughNioContainer.release(this.recvSocket.getChannel());
+            GoThroughNioContainer.release(this.recvSocket);
         }
 
 
         try {
-            Socket sendSocket;
+            SocketChannel sendSocket;
             if ((sendSocket = this.sendSocket) != null) {
                 // TCP 挥手步骤，对方调用 shutdownOutput 后等价完成 socket.close
                 sendSocket.shutdownOutput();
@@ -217,7 +216,7 @@ public class InteractivePassWay extends AbstractNIORunnable implements Runnable 
             return;
         }
         this.alive = true;
-        SocketChannel recvChannel = this.recvSocket.getChannel();
+        SocketChannel recvChannel = this.recvSocket;
         if (threadManager.getNio() || Objects.isNull(recvChannel)) {
             executorService.execute(this);
         } else {

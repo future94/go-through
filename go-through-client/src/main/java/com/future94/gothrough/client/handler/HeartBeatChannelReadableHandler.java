@@ -1,32 +1,28 @@
 package com.future94.gothrough.client.handler;
 
-import com.future94.gothrough.client.adapter.ClientAdapter;
 import com.future94.gothrough.common.enums.InteractiveTypeEnum;
 import com.future94.gothrough.protocol.model.InteractiveModel;
 import com.future94.gothrough.protocol.model.dto.InteractiveResultDTO;
+import com.future94.gothrough.protocol.nio.handler.SimpleChannelReadableHandler;
+import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
 
 /**
+ * 处理{@link InteractiveTypeEnum#HEART_BEAT}消息
+ *
  * @author weilai
  */
-public class HeartBeatHandler implements ClientHandler<InteractiveModel, InteractiveModel> {
+public class HeartBeatChannelReadableHandler extends SimpleChannelReadableHandler<InteractiveModel> {
 
-    private static final HeartBeatHandler INSTANCE = new HeartBeatHandler();
-
-    private HeartBeatHandler() {
-    }
-
-    public static HeartBeatHandler getInstance() {
-        return INSTANCE;
+    @Override
+    protected boolean support(InteractiveModel msg) {
+        InteractiveTypeEnum interactiveTypeEnum = InteractiveTypeEnum
+                .getEnumByName(msg.getInteractiveType());
+        return InteractiveTypeEnum.HEART_BEAT.equals(interactiveTypeEnum);
     }
 
     @Override
-    public boolean process(InteractiveModel model, ClientAdapter<InteractiveModel, InteractiveModel> clientAdapter) throws Exception {
-        InteractiveTypeEnum interactiveTypeEnum = InteractiveTypeEnum.getEnumByName(model.getInteractiveType());
-        if (!InteractiveTypeEnum.HEART_BEAT.equals(interactiveTypeEnum)) {
-            return false;
-        }
-        InteractiveModel sendModel = InteractiveModel.of(model.getInteractiveSeq(), InteractiveTypeEnum.HEART_BEAT, InteractiveResultDTO.buildSuccess());
-        clientAdapter.getGoThroughSocketChannel().writeAndFlush(sendModel);
-        return true;
+    protected void channelRead0(ChannelHandlerContext ctx, InteractiveModel msg) {
+        InteractiveModel sendModel = InteractiveModel.of(msg.getInteractiveSeq(), InteractiveTypeEnum.HEART_BEAT, InteractiveResultDTO.buildSuccess());
+        ctx.write(sendModel);
     }
 }
