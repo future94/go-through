@@ -36,8 +36,7 @@ public class ClientWaitAcceptHandler implements AcceptHandler {
         socketPart.setRecvSocket(socketChannel);
         InteractiveModel model = InteractiveModel.of(InteractiveTypeEnum.SERVER_WAIT_CLIENT, new ServerWaitClientDTO(socketPartKey));
         try {
-            // FIXME: 发送到与之建立链接的客户端SocketChannel
-            this.manager.write(socketChannel, model);
+            this.manager.write(manager.getClientSocketChannel(), model);
             this.manager.setSocketPartCache(socketPartKey, socketPart);
         } catch (Exception e) {
             log.error("ClientWaitHandler write SERVER_WAIT_CLIENT message error", e);

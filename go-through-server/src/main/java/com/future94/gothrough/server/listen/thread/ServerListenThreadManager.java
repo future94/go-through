@@ -49,6 +49,11 @@ public class ServerListenThreadManager implements ThreadManager {
      */
     private final Map<String, SocketPart> socketPartCache = new ConcurrentHashMap<>();
 
+    /**
+     * 与之交互的确认的ClientSocketChannel
+     */
+    private SocketChannel clientSocketChannel;
+
     public ServerListenThreadManager(ServerListenConfig config) {
         this.config = config;
         GoThroughNioServer nioServer = new GoThroughNioServer();
@@ -62,10 +67,6 @@ public class ServerListenThreadManager implements ThreadManager {
         log.info("server listen port[{}] is created!", this.getListenPort());
     }
 
-    public Integer getListenPort() {
-        return this.config.getListenPort();
-    }
-
     public void setSocketPartCache(String socketPartKey, SocketPart socketPart) {
         this.socketPartCache.put(socketPartKey, socketPart);
     }
@@ -74,15 +75,16 @@ public class ServerListenThreadManager implements ThreadManager {
         server.writeChannel(socketChannel, msg);
     }
 
-    public void start() throws IOException {
+    public void start(SocketChannel clientSocketChannel) throws IOException {
         if (this.isCancel) {
             throw new IllegalStateException("已退出，不得重新启动");
         }
         if (this.isAlive) {
             throw new IllegalStateException("已经启动过了");
         }
-        this.isAlive = true;
         this.server.start();
+        this.clientSocketChannel = clientSocketChannel;
+        this.isAlive = true;
         log.info("setControlSocket[{}]", this.getListenPort());
 
     }
@@ -172,4 +174,11 @@ public class ServerListenThreadManager implements ThreadManager {
         socketPart.cancel();
     }
 
+    public Integer getListenPort() {
+        return this.config.getListenPort();
+    }
+
+    public SocketChannel getClientSocketChannel() {
+        return this.clientSocketChannel;
+    }
 }

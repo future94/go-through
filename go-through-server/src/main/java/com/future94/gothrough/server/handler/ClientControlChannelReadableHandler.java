@@ -41,7 +41,7 @@ public class ClientControlChannelReadableHandler extends SimpleChannelReadableHa
                 InteractiveTypeEnum.COMMON_REPLY, InteractiveResultDTO.buildSuccess()));
 
         try {
-            serverListenThreadManager.start();
+            serverListenThreadManager.start(ctx.getSocketChannel());
         } catch (IOException e) {
             log.error("serverListenThreadManager start error, port:[{}]", serverListenThreadManager.getListenPort());
             ctx.write(InteractiveModel.of(msg.getInteractiveSeq(),
