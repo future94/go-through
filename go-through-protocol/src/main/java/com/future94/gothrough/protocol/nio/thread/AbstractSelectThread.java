@@ -2,124 +2,56 @@ package com.future94.gothrough.protocol.nio.thread;
 
 import com.future94.gothrough.protocol.nio.buffer.FrameBuffer;
 import com.future94.gothrough.protocol.nio.handler.ChannelReadableHandler;
+import com.future94.gothrough.protocol.nio.handler.codec.Decoder;
+import com.future94.gothrough.protocol.nio.handler.codec.Encoder;
 import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
-import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.nio.channels.spi.SelectorProvider;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  * @author weilai
  */
 @Slf4j
-@EqualsAndHashCode(callSuper = false)
-public class SelectorThread extends Thread {
+public abstract class AbstractSelectThread extends Thread {
 
     /**
-     * Accept的选择
+     * 事件选择器
      */
-    private final Selector selector;
-
-    @Getter
-    private final GoThroughNioServer serverManager;
-
-    private final BlockingQueue<SocketChannel> queue = new LinkedBlockingDeque<>();
+    protected final Selector selector;
 
     protected final Set<FrameBuffer> selectInterestChanges = new HashSet<>();
 
-    public SelectorThread(GoThroughNioServer serverManager) throws IOException {
-        this("Selector-Thread-Listen-" + serverManager.getPort(), serverManager);
-    }
-
-    public SelectorThread(String threadName, GoThroughNioServer serverManager) throws IOException {
-        super.setName(threadName);
-        this.selector = SelectorProvider.provider().openSelector();
-        this.serverManager = serverManager;
-    }
-
     /**
-     * 将接收到的SocketChanel加入到队列
-     *
-     * @param socketChannel Accept事件接收到的SocketChannel
+     * 当{@link java.nio.channels.SelectionKey#OP_READ}事件的回调
      */
-    public void addQueue(SocketChannel socketChannel) {
-        try {
-            socketChannel.configureBlocking(false);
-            queue.put(socketChannel);
-            selector.wakeup();
-        } catch (IOException | InterruptedException e) {
-            log.error("Queued the SocketChannel received by the ACCEPT event as an exception.", e);
-        }
-    }
+    private final List<ChannelReadableHandler> channelReadableHandlers;
 
-    @Override
-    public void run() {
-        try {
-            for (; this.serverManager.isStart(); ) {
-                select();
-                processAcceptedConnections();
-            }
-        } catch (Throwable e) {
-            log.error("The thread [{}] processing select method throws IOException ", getName(), e);
-        } finally {
-            this.serverManager.stop();
-        }
-    }
+    @Getter
+    private final Encoder encoder;
 
-    private void processAcceptedConnections() {
-        // Register accepted connections
-        for (; this.serverManager.isStart(); ) {
-            SocketChannel socketChannel = queue.poll();
-            if (socketChannel == null) {
-                break;
-            }
-            registerAccepted(socketChannel);
-        }
-    }
+    private final Decoder<?> decoder;
 
-    /**
-     * 处理
-     */
-    public void processSelectInterestChange(FrameBuffer frameBuffer) {
-        synchronized (selectInterestChanges) {
-            selectInterestChanges.add(frameBuffer);
-        }
-        selector.wakeup();
-    }
-
-    @SuppressWarnings("all")
-    private void registerAccepted(SocketChannel socketChannel) {
-        SelectionKey clientSelectionKey = null;
-        try {
-            clientSelectionKey = socketChannel.register(selector, SelectionKey.OP_READ);
-            FrameBuffer frameBuffer = new FrameBuffer(this, clientSelectionKey);
-            clientSelectionKey.attach(frameBuffer);
-        } catch (IOException e) {
-            log.warn("Failed to register accepted connection to selector!", e);
-            cleanupSelectionKey(clientSelectionKey);
-            try {
-                socketChannel.close();
-            } catch (IOException ex) {
-                log.warn("Failed to close socketChannel", e);
-            }
-        }
+    public AbstractSelectThread(List<ChannelReadableHandler> channelReadableHandlers, Encoder encoder, Decoder<?> decoder) throws IOException {
+        this.channelReadableHandlers = channelReadableHandlers;
+        this.encoder = encoder;
+        this.decoder = decoder;
+        this.selector = Selector.open();
     }
 
     /**
      * 处理Selector事件
      */
-    private void select() {
+    protected void select() {
         try {
             int select = selector.select();
             if (select <= 0) {
@@ -159,9 +91,6 @@ public class SelectorThread extends Thread {
             if (!doReadableHandler(selectionKey)) {
                 cleanupSelectionKey(selectionKey);
             }
-            if (!invokeWritable(selectionKey)) {
-                cleanupSelectionKey(selectionKey);
-            }
         }
     }
 
@@ -176,15 +105,15 @@ public class SelectorThread extends Thread {
     }
 
     /**
-     * 回调{@link com.future94.gothrough.protocol.nio.handler.ChannelWritableHandler}业务代码写入buffer
+     * 向SocketChanel写入数据
      */
-    private boolean invokeWritable(SelectionKey selectionKey) {
-        FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
-        if (!buffer.invoke()) {
-            cleanupSelectionKey(selectionKey);
+    public boolean write(SocketChannel socketChannel, Object msg) {
+        FrameBuffer buffer = getBuffer(socketChannel);
+        if (buffer == null) {
+            log.warn("Failed to write data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
             return false;
         }
-        return true;
+        return buffer.writeBuffer(msg);
     }
 
     /**
@@ -198,8 +127,8 @@ public class SelectorThread extends Thread {
         SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
         try {
             ChannelHandlerContext ctx = new ChannelHandlerContext(buffer, socketChannel);
-            for (ChannelReadableHandler channelReadableHandler : serverManager.getChannelReadableHandlers()) {
-                Object decode = serverManager.getDecoder().decode(buffer);
+            for (ChannelReadableHandler channelReadableHandler : channelReadableHandlers) {
+                Object decode = decoder.decode(buffer);
                 if (!channelReadableHandler.supports(decode)) {
                     continue;
                 }
@@ -224,17 +153,47 @@ public class SelectorThread extends Thread {
         }
     }
 
+    public void wakeup() {
+        selector.wakeup();
+    }
+
     /**
      * 清除掉操作操作失败的SelectionKey
      *
      * @param selectionKey 要清除的selectionKey
      */
-    private void cleanupSelectionKey(SelectionKey selectionKey) {
+    protected void cleanupSelectionKey(SelectionKey selectionKey) {
         FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
         if (buffer != null) {
             buffer.close();
         }
         selectionKey.cancel();
     }
+    /**
+     * 处理
+     */
+    public void processSelectInterestChange(FrameBuffer frameBuffer) {
+        synchronized (selectInterestChanges) {
+            selectInterestChanges.add(frameBuffer);
+        }
+        selector.wakeup();
+    }
 
+    protected void processInterestChanges() {
+        synchronized (selectInterestChanges) {
+            for (FrameBuffer fb : selectInterestChanges) {
+                fb.changeSelectInterests ();
+            }
+            selectInterestChanges.clear ();
+        }
+    }
+
+    public abstract SelectionKey prepareWriteBuffer(SelectionKey selectionKey) throws ClosedChannelException;
+
+    /**
+     * 获取对应SocketChannel的FrameBuffer
+     * @param socketChannel     要获取buffer的SocketChannel
+     * @return {@code null}     SocketChannel不匹配
+     */
+    abstract public FrameBuffer getBuffer(SocketChannel socketChannel);
 }

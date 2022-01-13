@@ -1,7 +1,7 @@
 package com.future94.gothrough.server.thread;
 
-import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
-import com.future94.gothrough.protocol.nio.server.NioServer;
+import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
+import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import com.future94.gothrough.server.config.ServerConfig;
 import com.future94.gothrough.server.handler.ClientConnectChannelReadableHandler;
 import com.future94.gothrough.server.handler.ClientControlChannelReadableHandler;

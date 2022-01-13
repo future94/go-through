@@ -1,7 +1,7 @@
 package com.future94.gothrough.server.listen.thread;
 
-import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
-import com.future94.gothrough.protocol.nio.server.NioServer;
+import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
+import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import com.future94.gothrough.protocol.part.SocketPart;
 import com.future94.gothrough.protocol.thread.ThreadManager;
 import com.future94.gothrough.server.listen.cache.ServerListenThreadCache;

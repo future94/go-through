@@ -1,7 +1,6 @@
-package com.future94.gothrough.protocol.nio.server;
+package com.future94.gothrough.protocol.nio.thread.server;
 
-import com.future94.gothrough.protocol.nio.handler.codec.Decoder;
-import com.future94.gothrough.protocol.nio.handler.codec.Encoder;
+import com.future94.gothrough.protocol.nio.thread.IProcess;
 
 import java.io.IOException;
 
@@ -9,7 +8,7 @@ import java.io.IOException;
  * 服务端
  * @author weilai
  */
-public interface IServer {
+public interface IServer extends IProcess {
 
     /**
      * 创建服务
@@ -55,29 +54,5 @@ public interface IServer {
      * 停止NIO Server
      */
     void stop();
-
-    /**
-     * 获取编码器
-     * @return {@code Encoder}
-     */
-    Encoder getEncoder();
-
-    /**
-     * 设置编码器
-     * @param encoder {@code Encoder}
-     */
-    void setEncoder(Encoder encoder);
-
-    /**
-     * 获取解码器
-     * @return {@code Decoder}
-     */
-    Decoder<?> getDecoder();
-
-    /**
-     * 设置编码器
-     * @param decoder {@code Decoder}
-     */
-    void setDecoder(Decoder<?> decoder);
 
 }

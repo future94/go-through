@@ -1,7 +1,7 @@
 package com.future94.gothrough.protocol.nio.handler.codec;
 
 /**
- * {@link com.future94.gothrough.protocol.nio.server.IServer}的编码器
+ * {@link com.future94.gothrough.protocol.nio.thread.server.IServer}的编码器
  * 配合{@link Decoder}进行使用
  *
  * @author weilai

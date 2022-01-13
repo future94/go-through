@@ -1,11 +1,11 @@
-package com.future94.gothrough.protocol.nio.thread;
+package com.future94.gothrough.protocol.nio.thread.server.thread;
 
 /**
  * @author weilai
  */
 
 import com.future94.gothrough.protocol.nio.handler.AcceptHandler;
-import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
+import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -111,7 +111,7 @@ public class AcceptThread extends Thread {
         try {
             ServerSocketChannel serverSocketChannel = (ServerSocketChannel) selectionKey.channel();
             SocketChannel socketChannel = serverSocketChannel.accept();
-            SelectorThread selectorThread = serverManager.chooseSelectorThread();
+            ServerSelectorThread selectorThread = serverManager.chooseSelectorThread();
             selectorThread.addQueue(socketChannel);
             doAcceptHandler(selectionKey);
         } catch (IOException e) {

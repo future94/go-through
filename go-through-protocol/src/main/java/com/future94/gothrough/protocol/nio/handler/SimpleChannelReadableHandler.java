@@ -4,7 +4,7 @@ import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext
 
 /**
  * 继承{@link SimpleChannelReadableHandler}处理读到数据逻辑
- * @param <I> 实际拿到的类型  需要在{@link com.future94.gothrough.protocol.nio.server.IServer}中设置对应的
+ * @param <I> 实际拿到的类型  需要在{@link com.future94.gothrough.protocol.nio.thread.server.IServer}中设置对应的
  *                          编码器{@link com.future94.gothrough.protocol.nio.handler.codec.Encoder}和
  *                          解码器{@link com.future94.gothrough.protocol.nio.handler.codec.Decoder}
  *

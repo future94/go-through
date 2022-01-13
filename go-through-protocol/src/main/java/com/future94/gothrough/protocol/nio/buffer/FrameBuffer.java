@@ -1,13 +1,14 @@
 package com.future94.gothrough.protocol.nio.buffer;
 
 import com.future94.gothrough.common.utils.ByteBufferUtils;
-import com.future94.gothrough.protocol.nio.handler.ChannelWritableHandler;
-import com.future94.gothrough.protocol.nio.thread.SelectorThread;
+import com.future94.gothrough.protocol.nio.thread.AbstractSelectThread;
+import com.future94.gothrough.protocol.nio.thread.server.thread.ServerSelectorThread;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.LongAdder;
@@ -16,7 +17,7 @@ import java.util.concurrent.atomic.LongAdder;
  * @author weilai
  */
 @Slf4j
-@EqualsAndHashCode
+@EqualsAndHashCode(exclude = "selectorThread")
 public class FrameBuffer {
 
     /**
@@ -25,9 +26,9 @@ public class FrameBuffer {
     private ByteBuffer buffer;
 
     /**
-     * 所属的{@link SelectorThread}
+     * 所属的{@link ServerSelectorThread}
      */
-    private final SelectorThread selectorThread;
+    private final AbstractSelectThread selectorThread;
 
     /**
      * 最大同时可读空间，默认为{@link Long#MAX_VALUE}，具体查看{@link #read()}方法.
@@ -43,7 +44,7 @@ public class FrameBuffer {
      */
     private final LongAdder readBufferBytesAllocated = new LongAdder();
 
-    private final SelectionKey selectionKey;
+    private SelectionKey selectionKey;
 
     private final SocketChannel socketChannel;
 
@@ -52,11 +53,11 @@ public class FrameBuffer {
      */
     private FrameBufferStateEnum state = FrameBufferStateEnum.PREPARE_READ_FRAME;
 
-    public FrameBuffer(SelectorThread selectorThread, SelectionKey selectionKey) {
+    public FrameBuffer(AbstractSelectThread selectorThread, SelectionKey selectionKey) {
         this(selectorThread, selectionKey, Long.MAX_VALUE);
     }
 
-    public FrameBuffer(SelectorThread selectorThread, SelectionKey selectionKey, long maxReadBufferBytes) {
+    public FrameBuffer(AbstractSelectThread selectorThread, SelectionKey selectionKey, long maxReadBufferBytes) {
         this.initByteBuffer();
         this.selectorThread = selectorThread;
         this.selectionKey = selectionKey;
@@ -162,7 +163,7 @@ public class FrameBuffer {
      */
     public boolean writeBuffer(Object msg) {
         try {
-            byte[] encode = selectorThread.getServerManager().getEncoder().encode(msg);
+            byte[] encode = selectorThread.getEncoder().encode(msg);
             readBufferBytesAllocated.add(-buffer.array().length);
             buffer = ByteBuffer.wrap(encode, 0, encode.length);
             state = FrameBufferStateEnum.WAITING_WRITE_FRAME;
@@ -233,23 +234,6 @@ public class FrameBuffer {
     }
 
     /**
-     * 回调要写入的业务将值存入buffer
-     * @return {@code true} 写入buffer成功
-     */
-    public boolean invoke() {
-        try {
-            ChannelWritableHandler channelWritableHandler = selectorThread.getServerManager().getChannelWritableHandler();
-            if (channelWritableHandler != null) {
-                return writeBuffer(channelWritableHandler.channelWrite());
-            }
-            return true;
-        } catch (Exception e) {
-            log.error("call channelWritableHandler error", e);
-            return false;
-        }
-    }
-
-    /**
      * 处理SelectInterest更改
      */
     private void processSelectInterestChange() {
@@ -266,7 +250,14 @@ public class FrameBuffer {
     public void changeSelectInterests() {
         if (state == FrameBufferStateEnum.WAITING_WRITE_FRAME) {
             // set the OP_WRITE interest
-            selectionKey.interestOps(SelectionKey.OP_WRITE);
+//            selectionKey.interestOps(SelectionKey.OP_WRITE);
+            try {
+                SelectionKey selectionKey = selectorThread.prepareWriteBuffer(this.selectionKey);
+                selectionKey.attach(this);
+                this.selectionKey = selectionKey;
+            } catch (ClosedChannelException e) {
+                log.error("socket channel register OP_WRITE error", e);
+            }
             state = FrameBufferStateEnum.WRITING_FRAME;
         } else if (state == FrameBufferStateEnum.WRITE_FRAME_COMPLETE) {
             setPrepareReadState();

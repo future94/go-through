@@ -11,8 +11,8 @@ import com.future94.gothrough.protocol.model.InteractiveModel;
 import com.future94.gothrough.protocol.model.dto.ClientControlDTO;
 import com.future94.gothrough.protocol.model.dto.InteractiveResultDTO;
 import com.future94.gothrough.protocol.model.dto.ServerWaitClientDTO;
-import com.future94.gothrough.protocol.nio.server.GoThroughNioServer;
-import com.future94.gothrough.protocol.nio.server.NioServer;
+import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
+import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import com.future94.gothrough.protocol.part.InteractiveSocketPart;
 import com.future94.gothrough.protocol.part.SocketPart;
 import com.future94.gothrough.protocol.thread.ThreadManager;
@@ -145,7 +145,7 @@ public class ClientThreadManager implements ThreadManager {
             return false;
         }
         try {
-            InteractiveModel recv = (InteractiveModel) server.readChannel(getServerSocketChannel());
+            InteractiveModel recv = (InteractiveModel) server.readBlockSocketChannel(getServerSocketChannel());
             log.debug("建立控制端口回复：{}", recv);
             InteractiveResultDTO resultDTO = recv.getData().convert(InteractiveResultDTO.class);
             if (!resultDTO.isSuccess()) {
@@ -185,7 +185,7 @@ public class ClientThreadManager implements ThreadManager {
             return false;
         }
         try {
-            InteractiveModel recv = (InteractiveModel) server.readChannel(getServerSocketChannel());
+            InteractiveModel recv = (InteractiveModel) server.readBlockSocketChannel(getServerSocketChannel());
             log.debug("建立隧道回复：{}", recv);
             InteractiveResultDTO resultDTO = recv.getData().convert(InteractiveResultDTO.class);
             if (!resultDTO.isSuccess()) {

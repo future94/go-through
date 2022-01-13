@@ -3,7 +3,7 @@ package com.future94.gothrough.protocol.nio.handler.codec;
 import com.future94.gothrough.protocol.nio.buffer.FrameBuffer;
 
 /**
- * {@link com.future94.gothrough.protocol.nio.server.IServer}的解码器
+ * {@link com.future94.gothrough.protocol.nio.thread.server.IServer}的解码器
  * 配合{@link Encoder}进行使用
  *
  * @author weilai
