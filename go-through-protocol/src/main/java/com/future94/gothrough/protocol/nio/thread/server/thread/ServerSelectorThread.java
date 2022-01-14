@@ -1,6 +1,7 @@
 package com.future94.gothrough.protocol.nio.thread.server.thread;
 
 import com.future94.gothrough.protocol.nio.buffer.FrameBuffer;
+import com.future94.gothrough.protocol.nio.handler.AcceptHandler;
 import com.future94.gothrough.protocol.nio.thread.AbstractSelectThread;
 import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import lombok.EqualsAndHashCode;
@@ -71,16 +72,17 @@ public class ServerSelectorThread extends AbstractSelectThread {
     private void processAcceptedConnections() {
         // Register accepted connections
         for (; this.server.isStart(); ) {
-            SocketChannel socketChannel = queue.poll();
+            final SocketChannel socketChannel = queue.poll();
             if (socketChannel == null) {
                 break;
             }
             registerAccepted(socketChannel);
+            executorService.execute( () -> doAcceptHandler(socketChannel));
         }
     }
 
     @SuppressWarnings("all")
-    private void registerAccepted(SocketChannel socketChannel) {
+    public void registerAccepted(SocketChannel socketChannel) {
         SelectionKey clientSelectionKey = null;
         try {
             clientSelectionKey = socketChannel.register(selector, SelectionKey.OP_READ);
@@ -95,6 +97,19 @@ public class ServerSelectorThread extends AbstractSelectThread {
             } catch (IOException ex) {
                 log.warn("Failed to close socketChannel", e);
             }
+        }
+    }
+
+    /**
+     * 回调{@link AcceptHandler}处理器
+     */
+    private void doAcceptHandler(SocketChannel socketChannel) {
+        try {
+            for (AcceptHandler acceptHandler : server.getAcceptHandlers()) {
+                acceptHandler.accept(socketChannel);
+            }
+        } catch (Exception e) {
+            log.error("Got an Exception while doAcceptHandler() in accept thread [{}]!", super.getName(), e);
         }
     }
 

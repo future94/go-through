@@ -5,6 +5,7 @@ import com.future94.gothrough.protocol.nio.handler.ChannelReadableHandler;
 import com.future94.gothrough.protocol.nio.handler.codec.Decoder;
 import com.future94.gothrough.protocol.nio.handler.codec.Encoder;
 import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
+import com.future94.gothrough.protocol.thread.GoThroughThreadFactory;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,6 +18,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author weilai
@@ -29,12 +34,16 @@ public abstract class AbstractSelectThread extends Thread {
      */
     protected final Selector selector;
 
-    protected final Set<FrameBuffer> selectInterestChanges = new HashSet<>();
+    protected final Set<FrameBuffer> selectInterestReadChanges = new HashSet<>();
+
+    protected final Set<FrameBuffer> selectInterestWriteChanges = new HashSet<>();
 
     /**
      * 当{@link java.nio.channels.SelectionKey#OP_READ}事件的回调
      */
     private final List<ChannelReadableHandler> channelReadableHandlers;
+
+    protected final ExecutorService executorService = new ThreadPoolExecutor(1, 10, 60L, TimeUnit.MILLISECONDS, new SynchronousQueue<>(), GoThroughThreadFactory.create("business"));
 
     @Getter
     private final Encoder encoder;
@@ -81,17 +90,22 @@ public abstract class AbstractSelectThread extends Thread {
     /**
      * 读事件处理
      */
-    private void handleRead(SelectionKey selectionKey) {
+    private void handleRead(final SelectionKey selectionKey) {
         FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
         if (!buffer.read()) {
             cleanupSelectionKey(selectionKey);
             return;
         }
         if (buffer.isReadCompleted()) {
-            if (!doReadableHandler(selectionKey)) {
+            try {
+                final Object decode = decoder.decode(buffer);
+                SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+                executorService.execute( () -> doReadableHandler(decode, buffer, socketChannel));
+            } catch (Exception e) {
                 cleanupSelectionKey(selectionKey);
             }
         }
+        buffer.processSelectInterestChange(false);
     }
 
     /**
@@ -122,13 +136,10 @@ public abstract class AbstractSelectThread extends Thread {
      * @param selectionKey 已经读取好数据的buffer
      * @return {@code true} 回调成功
      */
-    private boolean doReadableHandler(SelectionKey selectionKey) {
-        FrameBuffer buffer = (FrameBuffer) selectionKey.attachment();
-        SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+    private boolean doReadableHandler(Object decode, FrameBuffer buffer, SocketChannel socketChannel) {
         try {
             ChannelHandlerContext ctx = new ChannelHandlerContext(buffer, socketChannel);
             for (ChannelReadableHandler channelReadableHandler : channelReadableHandlers) {
-                Object decode = decoder.decode(buffer);
                 if (!channelReadableHandler.supports(decode)) {
                     continue;
                 }
@@ -172,19 +183,32 @@ public abstract class AbstractSelectThread extends Thread {
     /**
      * 处理
      */
-    public void processSelectInterestChange(FrameBuffer frameBuffer) {
-        synchronized (selectInterestChanges) {
-            selectInterestChanges.add(frameBuffer);
+    public void processSelectInterestReadChange(FrameBuffer frameBuffer) {
+        synchronized (selectInterestReadChanges) {
+            selectInterestReadChanges.add(frameBuffer);
+        }
+        selector.wakeup();
+    }
+
+    public void processSelectInterestWriteChange(FrameBuffer frameBuffer) {
+        synchronized (selectInterestWriteChanges) {
+            selectInterestWriteChanges.add(frameBuffer);
         }
         selector.wakeup();
     }
 
     protected void processInterestChanges() {
-        synchronized (selectInterestChanges) {
-            for (FrameBuffer fb : selectInterestChanges) {
-                fb.changeSelectInterests ();
+        synchronized (selectInterestReadChanges) {
+            for (FrameBuffer fb : selectInterestReadChanges) {
+                fb.changeSelectInterests(false);
             }
-            selectInterestChanges.clear ();
+            selectInterestReadChanges.clear ();
+        }
+        synchronized (selectInterestWriteChanges) {
+            for (FrameBuffer fb : selectInterestWriteChanges) {
+                fb.changeSelectInterests(true);
+            }
+            selectInterestWriteChanges.clear ();
         }
     }
 

@@ -78,9 +78,7 @@ public class ClientSelectThread extends AbstractSelectThread {
             log.warn("Failed to write data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
             return false;
         }
-        boolean write = buffer.writeBuffer(msg);
-        wakeup();
-        return write;
+        return buffer.writeBuffer(msg);
     }
 
     @Override

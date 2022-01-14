@@ -4,8 +4,8 @@ package com.future94.gothrough.protocol.nio.thread.server.thread;
  * @author weilai
  */
 
-import com.future94.gothrough.protocol.nio.handler.AcceptHandler;
 import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
+import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -32,18 +32,18 @@ public class AcceptThread extends Thread {
     /**
      * 所属的Server
      */
-    private final GoThroughNioServer serverManager;
+    private final NioServer server;
 
-    public AcceptThread(GoThroughNioServer serverManager) throws IOException {
-        this("Accept-Thread-Listen-" + serverManager.getPort(), serverManager);
+    public AcceptThread(GoThroughNioServer server) throws IOException {
+        this("Accept-Thread-Listen-" + server.getPort(), server);
     }
 
-    AcceptThread(String threadName, GoThroughNioServer serverManager) throws IOException {
+    AcceptThread(String threadName, NioServer server) throws IOException {
         super.setName(threadName);
         this.selector = SelectorProvider.provider().openSelector();
-        this.serverManager = serverManager;
+        this.server = server;
         ServerSocketChannel serverSocketChannel = SelectorProvider.provider().openServerSocketChannel();
-        serverSocketChannel.bind(new InetSocketAddress(serverManager.getPort()));
+        serverSocketChannel.bind(new InetSocketAddress(server.getPort()));
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
     }
@@ -51,13 +51,13 @@ public class AcceptThread extends Thread {
     @Override
     public void run() {
         try {
-            for (; serverManager.isStart(); ) {
+            for (; server.isStart(); ) {
                 select(selector);
             }
         } catch (Throwable e) {
             log.error("The thread [{}] processing select method throws IOException ", getName(), e);
         } finally {
-            serverManager.stop();
+            server.stop();
         }
     }
 
@@ -72,7 +72,7 @@ public class AcceptThread extends Thread {
                 return;
             }
             Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
-            while (serverManager.isStart() && iterator.hasNext()) {
+            while (server.isStart() && iterator.hasNext()) {
                 SelectionKey selectionKey = iterator.next();
                 iterator.remove();
                 if (!selectionKey.isValid()) {
@@ -92,28 +92,14 @@ public class AcceptThread extends Thread {
     }
 
     /**
-     * 回调{@link AcceptHandler}处理器
-     */
-    private void doAcceptHandler(SelectionKey selectionKey) {
-        try {
-            for (AcceptHandler acceptHandler : serverManager.getAcceptHandlers()) {
-                acceptHandler.accept(selectionKey);
-            }
-        } catch (Exception e) {
-            log.error("Got an Exception while doAcceptHandler() in accept thread [{}]!", super.getName(), e);
-        }
-    }
-
-    /**
      * 处理{@link SelectionKey#OP_ACCEPT}事件
      */
     private void handleAccept(SelectionKey selectionKey) {
         try {
             ServerSocketChannel serverSocketChannel = (ServerSocketChannel) selectionKey.channel();
             SocketChannel socketChannel = serverSocketChannel.accept();
-            ServerSelectorThread selectorThread = serverManager.chooseSelectorThread();
+            ServerSelectorThread selectorThread = server.chooseSelectorThread();
             selectorThread.addQueue(socketChannel);
-            doAcceptHandler(selectionKey);
         } catch (IOException e) {
             log.error("Got an IOException while handleAccept() in accept thread [{}]!", super.getName(), e);
         }

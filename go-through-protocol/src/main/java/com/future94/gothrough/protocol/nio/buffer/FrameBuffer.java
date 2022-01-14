@@ -8,9 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -48,10 +49,14 @@ public class FrameBuffer {
 
     private final SocketChannel socketChannel;
 
+    protected final BlockingQueue<byte[]> waitingWriteQueue = new LinkedBlockingQueue<>();
+
     /**
      * 当前{@link FrameBuffer}的状态，初始化为准备读
      */
-    private FrameBufferStateEnum state = FrameBufferStateEnum.PREPARE_READ_FRAME;
+    private volatile FrameBufferStateEnum readState = FrameBufferStateEnum.PREPARE_READ_FRAME;
+
+    private volatile FrameBufferStateEnum writeState = FrameBufferStateEnum.WAITING_WRITE_FRAME;
 
     public FrameBuffer(AbstractSelectThread selectorThread, SelectionKey selectionKey) {
         this(selectorThread, selectionKey, Long.MAX_VALUE);
@@ -67,12 +72,12 @@ public class FrameBuffer {
 
     /**
      * 重置状态
-     * 当状态{@link #state}为{@link FrameBufferStateEnum#WRITE_FRAME_COMPLETE}为时，
-     * 需要将设置{@link #state}为{@link FrameBufferStateEnum#PREPARE_READ_FRAME}状态
+     * 当状态{@link #readState}为{@link FrameBufferStateEnum#WRITE_FRAME_COMPLETE}为时，
+     * 需要将设置{@link #readState}为{@link FrameBufferStateEnum#PREPARE_READ_FRAME}状态
      */
     private void setPrepareReadState() {
         selectionKey.interestOps(SelectionKey.OP_READ);
-        this.state = FrameBufferStateEnum.PREPARE_READ_FRAME;
+        this.readState = FrameBufferStateEnum.PREPARE_READ_FRAME;
         this.initByteBuffer();
     }
 
@@ -90,7 +95,7 @@ public class FrameBuffer {
      */
     public boolean read() {
         // 准备读
-        if (state == FrameBufferStateEnum.PREPARE_READ_FRAME) {
+        if (readState == FrameBufferStateEnum.PREPARE_READ_FRAME) {
             if (!readSocketChannelBuffer()) {
                 return false;
             }
@@ -112,13 +117,13 @@ public class FrameBuffer {
                 readBufferBytesAllocated.add(frameSize);
                 buffer = ByteBuffer.allocate(frameSize);
                 // 设置为读取中
-                state = FrameBufferStateEnum.READING_FRAME;
+                readState = FrameBufferStateEnum.READING_FRAME;
             } else {
                 return true;
             }
         }
         // 读取中
-        if (state == FrameBufferStateEnum.READING_FRAME) {
+        if (readState == FrameBufferStateEnum.READING_FRAME) {
             if (!readSocketChannelBuffer()) {
                 return false;
             }
@@ -126,12 +131,11 @@ public class FrameBuffer {
             if (buffer.remaining() == 0) {
                 selectionKey.interestOps(0);
                 // 设置为读取完成
-                state = FrameBufferStateEnum.READ_FRAME_COMPLETE;
+                readState = FrameBufferStateEnum.READ_FRAME_COMPLETE;
             }
             return true;
         }
-
-        log.error("Read was called but state is invalid (" + state + ")");
+        log.error("Read was called but state is invalid (" + readState + ")");
         return false;
     }
 
@@ -153,7 +157,7 @@ public class FrameBuffer {
      * @return {@code true} 读取完成
      */
     public boolean isReadCompleted() {
-        return state == FrameBufferStateEnum.READ_FRAME_COMPLETE;
+        return readState == FrameBufferStateEnum.READ_FRAME_COMPLETE;
     }
 
     /**
@@ -164,22 +168,24 @@ public class FrameBuffer {
     public boolean writeBuffer(Object msg) {
         try {
             byte[] encode = selectorThread.getEncoder().encode(msg);
-            readBufferBytesAllocated.add(-buffer.array().length);
-            buffer = ByteBuffer.wrap(encode, 0, encode.length);
-            state = FrameBufferStateEnum.WAITING_WRITE_FRAME;
-            // 注册SelectionKey.OP_WRITE事件
-            // 设置state为FrameBufferStateEnum.WRITING_FRAME
-            processSelectInterestChange();
+            waitingWriteQueue.put(encode);
+//            selectorThread.wakeup();
+            if (writeState == FrameBufferStateEnum.WRITE_FRAME_COMPLETE || writeState == FrameBufferStateEnum.WAITING_WRITE_FRAME) {
+                writeState = FrameBufferStateEnum.WAITING_WRITE_FRAME;
+                // 注册SelectionKey.OP_WRITE事件
+                // 设置state为FrameBufferStateEnum.WRITING_FRAME
+                processSelectInterestChange(true);
+            }
             return true;
         } catch (ClassCastException ex) {
             log.error("Got an Exception while encode() in selector thread [{}]!", this.selectorThread.getName(), ex);
         } catch (Throwable t) {
             log.error("Unexpected throwable while invoking!", t);
         }
-        state = FrameBufferStateEnum.FRAME_COLSE;
+        readState = FrameBufferStateEnum.FRAME_COLSE;
         // 调用close()
         // 调用selectionKey.cancel();
-        processSelectInterestChange();
+        processSelectInterestChange(true);
         return false;
     }
 
@@ -188,25 +194,35 @@ public class FrameBuffer {
      * @return 是否写入成功
      */
     public boolean write() {
-        if (this.state == FrameBufferStateEnum.WRITING_FRAME) {
+        if (this.writeState == FrameBufferStateEnum.WRITING_FRAME) {
             try {
-                if (ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(ByteBufferUtils.intToBytes(buffer.array().length))) < 0) {
-                    return false;
-                }
-                if (ByteBufferUtils.channelWrite(socketChannel, buffer) < 0) {
-                    return false;
+                readBufferBytesAllocated.add(-buffer.array().length);
+                for (; this.selectorThread.isAlive(); ) {
+                    byte[] writePayload = waitingWriteQueue.poll();
+                    if (writePayload == null || writePayload.length == 0) {
+                        break;
+                    }
+                    ByteBuffer writeBuffer = ByteBuffer.wrap(writePayload, 0, writePayload.length);
+                    if (ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(ByteBufferUtils.intToBytes(writeBuffer.array().length))) < 0) {
+                        log.warn("write socket channel length fail, payload [{}]", writePayload);
+                        continue;
+                    }
+                    if (ByteBufferUtils.channelWrite(socketChannel, writeBuffer) < 0) {
+                        log.warn("write socket channel data fail, payload [{}]", writePayload);
+                        continue;
+                    }
                 }
             } catch (IOException e) {
                 log.warn("Got an IOException during write!", e);
                 return false;
             }
-            if (buffer.remaining() == 0) {
-                state = FrameBufferStateEnum.WRITE_FRAME_COMPLETE;
-                processSelectInterestChange();
+            if (waitingWriteQueue.isEmpty()) {
+                this.writeState = FrameBufferStateEnum.WRITE_FRAME_COMPLETE;
+                processSelectInterestChange(true);
             }
             return true;
         }
-        log.error("Write was called, but state is invalid [{}]", this.state.name());
+        log.error("Write was called, but state is invalid [{}]", this.writeState.name());
         return false;
     }
 
@@ -214,13 +230,8 @@ public class FrameBuffer {
      * 清除
      */
     public void close() {
-        if (state == FrameBufferStateEnum.READING_FRAME || state == FrameBufferStateEnum.READ_FRAME_COMPLETE) {
+        if (readState == FrameBufferStateEnum.READING_FRAME || readState == FrameBufferStateEnum.READ_FRAME_COMPLETE) {
             readBufferBytesAllocated.add(-buffer.array().length);
-        }
-        try {
-            socketChannel.close();
-        } catch (IOException e) {
-            log.error("close socketChannel error", e);
         }
     }
 
@@ -236,36 +247,39 @@ public class FrameBuffer {
     /**
      * 处理SelectInterest更改
      */
-    private void processSelectInterestChange() {
+    public void processSelectInterestChange(boolean write) {
         if (Thread.currentThread() == this.selectorThread) {
-            changeSelectInterests();
+            changeSelectInterests(write);
         } else {
-            this.selectorThread.processSelectInterestChange(this);
+            if (write) {
+                this.selectorThread.processSelectInterestWriteChange(this);
+            } else {
+                this.selectorThread.processSelectInterestReadChange(this);
+            }
         }
     }
 
     /**
      * 更改SelectInterest
      */
-    public void changeSelectInterests() {
-        if (state == FrameBufferStateEnum.WAITING_WRITE_FRAME) {
-            // set the OP_WRITE interest
-//            selectionKey.interestOps(SelectionKey.OP_WRITE);
-            try {
-                SelectionKey selectionKey = selectorThread.prepareWriteBuffer(this.selectionKey);
-                selectionKey.attach(this);
-                this.selectionKey = selectionKey;
-            } catch (ClosedChannelException e) {
-                log.error("socket channel register OP_WRITE error", e);
+    public void changeSelectInterests(boolean write) {
+        if (write) {
+            if (writeState == FrameBufferStateEnum.WAITING_WRITE_FRAME) {
+                // set the OP_WRITE interest
+                selectionKey.interestOps(SelectionKey.OP_WRITE);
+                writeState = FrameBufferStateEnum.WRITING_FRAME;
+            } else if (writeState == FrameBufferStateEnum.WRITE_FRAME_COMPLETE) {
+                selectionKey.interestOps(SelectionKey.OP_READ);
+                writeState = FrameBufferStateEnum.WAITING_WRITE_FRAME;
             }
-            state = FrameBufferStateEnum.WRITING_FRAME;
-        } else if (state == FrameBufferStateEnum.WRITE_FRAME_COMPLETE) {
-            setPrepareReadState();
-        } else if (state == FrameBufferStateEnum.FRAME_COLSE) {
+        } else {
+            if (readState == FrameBufferStateEnum.READ_FRAME_COMPLETE) {
+                setPrepareReadState();
+            }
+        }
+        if (readState == FrameBufferStateEnum.FRAME_COLSE || writeState == FrameBufferStateEnum.FRAME_COLSE) {
             this.close();
             selectionKey.cancel();
-        } else {
-            log.error("changeSelectInterest was called, but state is invalid [{}]", state.name());
         }
     }
 }

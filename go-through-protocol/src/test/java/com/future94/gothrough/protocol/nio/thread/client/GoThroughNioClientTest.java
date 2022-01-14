@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.Scanner;
 
 /**
  * @author weilai
@@ -20,11 +21,11 @@ class GoThroughNioClientTest {
         client.setReadableHandler(new TestPrintChannelReadableHandler());
         client.connect("127.0.0.1", 10010);
         client.writeChannel("hello");
-//        while (true) {
-//            Scanner scanner = new Scanner(System.in);
-//            String nextLine = scanner.nextLine();
-//            client.writeChannel(nextLine);
-//        }
+        while (true) {
+            Scanner scanner = new Scanner(System.in);
+            String nextLine = scanner.nextLine();
+            client.writeChannel(nextLine);
+        }
     }
 
     @Test

@@ -54,7 +54,6 @@ public class GoThroughNioServer extends AbstractProcess implements NioServer {
     /**
      * 当{@link java.nio.channels.SelectionKey#OP_ACCEPT}事件的回调
      */
-    @Getter
     private List<AcceptHandler> acceptHandlers = new ArrayList<>();
 
     /**
@@ -142,9 +141,15 @@ public class GoThroughNioServer extends AbstractProcess implements NioServer {
         this.acceptHandlers.add(acceptHandler);
     }
 
+    @Override
+    public List<AcceptHandler> getAcceptHandlers() {
+        return acceptHandlers;
+    }
+
     /**
      * 轮询选择一个{@link ServerSelectorThread}.
      */
+    @Override
     public ServerSelectorThread chooseSelectorThread() {
         Iterator<ServerSelectorThread> iterator = this.selectorThreadLoadBalancer;
         if (!iterator.hasNext()) {
@@ -162,7 +167,6 @@ public class GoThroughNioServer extends AbstractProcess implements NioServer {
             if (frameBuffer != null) {
                 matching = true;
                 frameBuffer.writeBuffer(msg);
-                selectorThread.wakeup();
             }
         }
         if (!matching && log.isWarnEnabled()) {

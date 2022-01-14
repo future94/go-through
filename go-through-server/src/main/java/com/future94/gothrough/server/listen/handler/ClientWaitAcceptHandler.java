@@ -11,8 +11,6 @@ import com.future94.gothrough.server.listen.thread.ServerListenThreadManager;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
 /**
@@ -28,11 +26,10 @@ public class ClientWaitAcceptHandler implements AcceptHandler {
     }
 
     @Override
-    public void accept(SelectionKey selectionKey) throws IOException {
+    public void accept(SocketChannel socketChannel) throws IOException {
         String socketPartKey = SequenceUtils.genSocketPartKey(this.manager.getListenPort());
         SocketPart socketPart = new InteractiveSocketPart(this.manager);
         socketPart.setSocketPartKey(socketPartKey);
-        SocketChannel socketChannel = ((ServerSocketChannel) selectionKey.channel()).accept();
         socketPart.setRecvSocket(socketChannel);
         InteractiveModel model = InteractiveModel.of(InteractiveTypeEnum.SERVER_WAIT_CLIENT, new ServerWaitClientDTO(socketPartKey));
         try {

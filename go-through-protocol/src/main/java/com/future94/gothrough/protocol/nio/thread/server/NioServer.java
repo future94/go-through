@@ -4,6 +4,7 @@ import com.future94.gothrough.protocol.nio.handler.AcceptHandler;
 import com.future94.gothrough.protocol.nio.thread.server.thread.ServerSelectorThread;
 
 import java.nio.channels.SocketChannel;
+import java.util.List;
 
 /**
  * NIO 实现的服务端
@@ -23,6 +24,8 @@ public interface NioServer extends IServer{
      */
     void setAcceptHandler(AcceptHandler acceptHandler);
 
+    List<AcceptHandler> getAcceptHandlers();
+
     /**
      * 向{@link SocketChannel}中写入数据
      * @param socketChannel 要写入的socketChannel
@@ -30,4 +33,6 @@ public interface NioServer extends IServer{
      * @throws Exception    写入异常
      */
     void writeChannel(SocketChannel socketChannel, Object msg) throws Exception;
+
+    ServerSelectorThread chooseSelectorThread();
 }
