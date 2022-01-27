@@ -19,11 +19,27 @@ public enum InteractiveTypeEnum {
 
     HEART_BEAT("发送心跳"),
 
-    SERVER_WAIT_CLIENT("需求客户端建立连接"),
+    SERVER_WAIT_CLIENT("需要客户端建立连接"),
 
+    /**
+     * 客户端启动像服务器请求建立连接
+     */
     CLIENT_CONTROL("客户端请求建立连接"),
 
+    /**
+     * 服务端对{@link #CLIENT_CONTROL}类型的响应
+     */
+    CLIENT_CONTROL_ANSWER("服务端响应客户端请求建立连接"),
+
+    /**
+     * 客户端建立通道连接
+     */
     CLIENT_CONNECT("客户端建立通道连接"),
+
+    /**
+     * 服务端对{@link #CLIENT_CONNECT}类型的响应
+     */
+    CLIENT_CONNECT_ANSWER("服务端响应客户端建立通道连接"),
 
     ;
 

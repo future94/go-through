@@ -1,9 +1,5 @@
 package com.future94.gothrough.protocol.nio.thread.server.thread;
 
-/**
- * @author weilai
- */
-
 import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
 import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import lombok.extern.slf4j.Slf4j;

@@ -8,7 +8,6 @@ import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
@@ -17,16 +16,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
+ * 处理SocketChannel读写线程
  * @author weilai
  */
 @Slf4j
 @EqualsAndHashCode(callSuper = false)
 public class ServerSelectorThread extends AbstractSelectThread {
 
+    /**
+     * 服务端
+     */
     private final NioServer server;
 
+    /**
+     * 存储Accept到的SocketChannel
+     */
     private final BlockingQueue<SocketChannel> queue = new LinkedBlockingDeque<>();
 
+    /**
+     * SocketChanel和Buffer对应缓存（Server主动写使用）
+     * {@code key}      Accept到的SocketChannel
+     * {@code value}    Socket对应操作的buffer
+     */
     private final Map<SocketChannel, FrameBuffer> bufferCache = new ConcurrentHashMap<>();
 
     public ServerSelectorThread(NioServer server) throws IOException {
@@ -116,10 +127,5 @@ public class ServerSelectorThread extends AbstractSelectThread {
     @Override
     public FrameBuffer getBuffer(SocketChannel socketChannel) {
         return this.bufferCache.get(socketChannel);
-    }
-
-    @Override
-    public SelectionKey prepareWriteBuffer(SelectionKey selectionKey) throws ClosedChannelException {
-        return selectionKey;
     }
 }

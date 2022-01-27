@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
+ * Nio服务端
  * @author weilai
  */
 @Slf4j
@@ -65,6 +66,8 @@ public class GoThroughNioServer extends AbstractProcess implements NioServer {
      * {@link ServerSelectorThread}线程数
      */
     private int selectorThreadCount = 1 << 2;
+
+    private boolean readByteArray = false;
 
     @Override
     public Integer getPort() {
@@ -160,17 +163,28 @@ public class GoThroughNioServer extends AbstractProcess implements NioServer {
 
     @Override
     public void writeChannel(SocketChannel socketChannel, Object msg) throws Exception {
+        FrameBuffer frameBuffer = matchBuffer(socketChannel);
+        if (frameBuffer != null) {
+            frameBuffer.write(msg);
+        } else {
+            if (log.isWarnEnabled()) {
+                log.warn("Failed to write object data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
+            }
+        }
+    }
+
+    /**
+     * 找到SocketChannel对应的buffer
+     * @return {@code null} 未匹配
+     */
+    private FrameBuffer matchBuffer(SocketChannel socketChannel) {
         Set<ServerSelectorThread> selectorThreads = getSelectorThreads();
-        boolean matching = false;
         for (ServerSelectorThread selectorThread : selectorThreads) {
             FrameBuffer frameBuffer = selectorThread.getBuffer(socketChannel);
             if (frameBuffer != null) {
-                matching = true;
-                frameBuffer.writeBuffer(msg);
+                return frameBuffer;
             }
         }
-        if (!matching && log.isWarnEnabled()) {
-            log.warn("Failed to write data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
-        }
+        return null;
     }
 }

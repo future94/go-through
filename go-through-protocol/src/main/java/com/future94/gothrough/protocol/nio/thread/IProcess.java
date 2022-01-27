@@ -8,6 +8,7 @@ import java.nio.channels.SocketChannel;
 import java.util.List;
 
 /**
+ * 公用处理方法
  * @author weilai
  */
 public interface IProcess {

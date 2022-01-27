@@ -1,13 +1,30 @@
 package com.future94.gothrough.common.utils;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 
 /**
  * @author weilai
  */
+@Slf4j
 public class ByteBufferUtils {
+
+    public static boolean channelWrite(SocketChannel socketChannel, byte[] writePayload) throws IOException {
+        ByteBuffer writeBuffer = ByteBuffer.wrap(writePayload, 0, writePayload.length);
+        if (ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(ByteBufferUtils.intToBytes(writeBuffer.array().length))) < 0) {
+            log.warn("write socket channel length fail, payload [{}]", writePayload);
+            return false;
+        }
+        if (ByteBufferUtils.channelWrite(socketChannel, writeBuffer) < 0) {
+            log.warn("write socket channel data fail, payload [{}]", writePayload);
+            return false;
+        }
+        return true;
+    }
 
     public static int channelWrite(WritableByteChannel channel, ByteBuffer buffer) throws IOException {
         int sum = 0;

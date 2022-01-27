@@ -8,23 +8,30 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
 /**
+ * 处理SocketChannel读写线程
  * @author weilai
  */
 @Slf4j
 @EqualsAndHashCode(callSuper = false)
 public class ClientSelectThread extends AbstractSelectThread {
 
+    /**
+     * NIO客户端
+     */
     private NioClient client;
+
     /**
      * 连接Server的SocketChannel
      */
     private final SocketChannel socketChannel;
 
+    /**
+     * 客户端操作的buffer
+     */
     private final FrameBuffer frameBuffer;
 
     public ClientSelectThread(NioClient client) throws IOException {
@@ -75,15 +82,10 @@ public class ClientSelectThread extends AbstractSelectThread {
     public boolean write(Object msg) {
         FrameBuffer buffer = getBuffer(socketChannel);
         if (buffer == null) {
-            log.warn("Failed to write data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
+            log.warn("Failed to write object data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
             return false;
         }
-        return buffer.writeBuffer(msg);
-    }
-
-    @Override
-    public SelectionKey prepareWriteBuffer(SelectionKey selectionKey) throws ClosedChannelException {
-        return socketChannel.register(selector, SelectionKey.OP_WRITE);
+        return buffer.write(msg);
     }
 
     @Override

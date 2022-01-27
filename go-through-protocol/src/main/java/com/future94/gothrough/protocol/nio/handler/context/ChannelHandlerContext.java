@@ -25,7 +25,7 @@ public class ChannelHandlerContext {
     }
 
     public boolean write(Object msg) {
-        return buffer.writeBuffer(msg);
+        return buffer.write(msg);
     }
 
     public SocketChannel getSocketChannel() {

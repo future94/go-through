@@ -5,6 +5,7 @@ import com.future94.gothrough.protocol.nio.thread.IProcess;
 import java.io.IOException;
 
 /**
+ * 客户端
  * @author weilai
  */
 public interface IClient extends IProcess {

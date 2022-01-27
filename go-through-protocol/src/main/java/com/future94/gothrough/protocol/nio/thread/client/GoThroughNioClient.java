@@ -11,11 +11,15 @@ import java.nio.channels.SocketChannel;
 import java.util.Objects;
 
 /**
+ * Nio客户端
  * @author weilai
  */
 @Slf4j
 public class GoThroughNioClient extends AbstractProcess implements NioClient {
 
+    /**
+     * 连接服务端状态
+     */
     private volatile boolean connected = false;
 
     /**
@@ -23,10 +27,21 @@ public class GoThroughNioClient extends AbstractProcess implements NioClient {
      */
     private volatile boolean started = false;
 
+    /**
+     * 是否使用编解码器
+     */
+    private boolean useCodec = true;
+
+    /**
+     * 服务端IP
+     */
     @Getter
     @Setter
     private String ip;
 
+    /**
+     * 服务端端口
+     */
     @Getter
     @Setter
     private int port;

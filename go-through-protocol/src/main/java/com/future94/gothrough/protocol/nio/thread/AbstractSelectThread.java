@@ -10,7 +10,6 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -34,24 +33,39 @@ public abstract class AbstractSelectThread extends Thread {
      */
     protected final Selector selector;
 
+    /**
+     * 有读状态修改的buffer集合
+     */
     protected final Set<FrameBuffer> selectInterestReadChanges = new HashSet<>();
 
+    /**
+     * 有写状态修改的buffer集合
+     */
     protected final Set<FrameBuffer> selectInterestWriteChanges = new HashSet<>();
 
     /**
      * 当{@link java.nio.channels.SelectionKey#OP_READ}事件的回调
      */
-    private final List<ChannelReadableHandler> channelReadableHandlers;
+    private final List<ChannelReadableHandler> objectHandlers;
 
+    /**
+     * 读取数据后执行业务{@link ChannelReadableHandler}的线程池
+     */
     protected final ExecutorService executorService = new ThreadPoolExecutor(1, 10, 60L, TimeUnit.MILLISECONDS, new SynchronousQueue<>(), GoThroughThreadFactory.create("business"));
 
+    /**
+     * 编码器
+     */
     @Getter
     private final Encoder encoder;
 
+    /**
+     * 解码器
+     */
     private final Decoder<?> decoder;
 
-    public AbstractSelectThread(List<ChannelReadableHandler> channelReadableHandlers, Encoder encoder, Decoder<?> decoder) throws IOException {
-        this.channelReadableHandlers = channelReadableHandlers;
+    public AbstractSelectThread(List<ChannelReadableHandler> objectHandlers, Encoder encoder, Decoder<?> decoder) throws IOException {
+        this.objectHandlers = objectHandlers;
         this.encoder = encoder;
         this.decoder = decoder;
         this.selector = Selector.open();
@@ -98,9 +112,9 @@ public abstract class AbstractSelectThread extends Thread {
         }
         if (buffer.isReadCompleted()) {
             try {
-                final Object decode = decoder.decode(buffer);
                 SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
-                executorService.execute( () -> doReadableHandler(decode, buffer, socketChannel));
+                byte[] bytes = buffer.readBufferBytes();
+                executorService.execute( () -> doReadableHandler(bytes, buffer, socketChannel));
             } catch (Exception e) {
                 cleanupSelectionKey(selectionKey);
             }
@@ -124,30 +138,26 @@ public abstract class AbstractSelectThread extends Thread {
     public boolean write(SocketChannel socketChannel, Object msg) {
         FrameBuffer buffer = getBuffer(socketChannel);
         if (buffer == null) {
-            log.warn("Failed to write data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
+            log.warn("Failed to write object data [{}] to the socket channel [{}]", msg.toString(), socketChannel.toString());
             return false;
         }
-        return buffer.writeBuffer(msg);
+        return buffer.write(msg);
     }
 
     /**
      * 回调{@link ChannelReadableHandler}处理器
      *
-     * @param selectionKey 已经读取好数据的buffer
      * @return {@code true} 回调成功
      */
-    private boolean doReadableHandler(Object decode, FrameBuffer buffer, SocketChannel socketChannel) {
+    private boolean doReadableHandler(byte[] decode, FrameBuffer buffer, SocketChannel socketChannel) {
         try {
             ChannelHandlerContext ctx = new ChannelHandlerContext(buffer, socketChannel);
-            for (ChannelReadableHandler channelReadableHandler : channelReadableHandlers) {
-                if (!channelReadableHandler.supports(decode)) {
+            for (ChannelReadableHandler channelReadableHandler : objectHandlers) {
+                if (!channelReadableHandler.supports(decoder, decode)) {
                     continue;
                 }
                 try {
-                    if (log.isDebugEnabled()) {
-                        log.debug("selector thread [{}] recv message :[{}]", super.getName(), decode.toString());
-                    }
-                    channelReadableHandler.channelRead(ctx, decode);
+                    channelReadableHandler.channelRead(ctx);
                 } catch (ClassCastException e) {
                     if (log.isWarnEnabled()) {
                         log.warn("Got an ClassCastException while channelRead() in selector thread [{}]!", super.getName(), e);
@@ -211,8 +221,6 @@ public abstract class AbstractSelectThread extends Thread {
             selectInterestWriteChanges.clear ();
         }
     }
-
-    public abstract SelectionKey prepareWriteBuffer(SelectionKey selectionKey) throws ClosedChannelException;
 
     /**
      * 获取对应SocketChannel的FrameBuffer

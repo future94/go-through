@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.LongAdder;
 public class FrameBuffer {
 
     /**
-     * 内部实际操作的缓冲区
+     * 内部读取实际操作的缓冲区，初始化为4个字节
      */
     private ByteBuffer buffer;
 
@@ -45,17 +45,29 @@ public class FrameBuffer {
      */
     private final LongAdder readBufferBytesAllocated = new LongAdder();
 
+    /**
+     * 选择键
+     */
     private SelectionKey selectionKey;
 
+    /**
+     * 所属的SocketChannel
+     */
     private final SocketChannel socketChannel;
 
-    protected final BlockingQueue<byte[]> waitingWriteQueue = new LinkedBlockingQueue<>();
+    /**
+     * 当写就绪时要写入的数据队列
+     */
+    private final BlockingQueue<byte[]> waitingWriteQueue = new LinkedBlockingQueue<>();
 
     /**
-     * 当前{@link FrameBuffer}的状态，初始化为准备读
+     * 当前{@link FrameBuffer}的读状态，初始化为准备读
      */
     private volatile FrameBufferStateEnum readState = FrameBufferStateEnum.PREPARE_READ_FRAME;
 
+    /**
+     * 当前{@link FrameBuffer}的写状态，初始化为等待写
+     */
     private volatile FrameBufferStateEnum writeState = FrameBufferStateEnum.WAITING_WRITE_FRAME;
 
     public FrameBuffer(AbstractSelectThread selectorThread, SelectionKey selectionKey) {
@@ -63,11 +75,11 @@ public class FrameBuffer {
     }
 
     public FrameBuffer(AbstractSelectThread selectorThread, SelectionKey selectionKey, long maxReadBufferBytes) {
-        this.initByteBuffer();
         this.selectorThread = selectorThread;
         this.selectionKey = selectionKey;
         this.socketChannel = (SocketChannel) selectionKey.channel();
         this.maxReadBufferBytes = maxReadBufferBytes;
+        this.initByteBuffer();
     }
 
     /**
@@ -163,13 +175,16 @@ public class FrameBuffer {
     /**
      * 将数据写入buffer
      * @param msg           要写入的数据
+     *                      如果msg是byte[]类型不会进行编码
      * @return {@code true} 写入buffer成功
      */
-    public boolean writeBuffer(Object msg) {
+    public boolean write(Object msg) {
         try {
-            byte[] encode = selectorThread.getEncoder().encode(msg);
-            waitingWriteQueue.put(encode);
-//            selectorThread.wakeup();
+            if (msg instanceof byte[]) {
+                waitingWriteQueue.put((byte[]) msg);
+            } else {
+                waitingWriteQueue.put(selectorThread.getEncoder().encode(msg));
+            }
             if (writeState == FrameBufferStateEnum.WRITE_FRAME_COMPLETE || writeState == FrameBufferStateEnum.WAITING_WRITE_FRAME) {
                 writeState = FrameBufferStateEnum.WAITING_WRITE_FRAME;
                 // 注册SelectionKey.OP_WRITE事件
@@ -202,15 +217,7 @@ public class FrameBuffer {
                     if (writePayload == null || writePayload.length == 0) {
                         break;
                     }
-                    ByteBuffer writeBuffer = ByteBuffer.wrap(writePayload, 0, writePayload.length);
-                    if (ByteBufferUtils.channelWrite(socketChannel, ByteBuffer.wrap(ByteBufferUtils.intToBytes(writeBuffer.array().length))) < 0) {
-                        log.warn("write socket channel length fail, payload [{}]", writePayload);
-                        continue;
-                    }
-                    if (ByteBufferUtils.channelWrite(socketChannel, writeBuffer) < 0) {
-                        log.warn("write socket channel data fail, payload [{}]", writePayload);
-                        continue;
-                    }
+                    ByteBufferUtils.channelWrite(socketChannel, writePayload);
                 }
             } catch (IOException e) {
                 log.warn("Got an IOException during write!", e);
