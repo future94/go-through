@@ -21,10 +21,10 @@ public class ClientThreadCache {
         if (serverListenThreadManager == null) {
             return;
         }
-        if (Objects.nonNull(CLIENT_THREAD_CACHE.get(serverListenThreadManager.getServerExposedListenPort()))) {
-            log.warn("serverExposedListenPort[{}]已经存在", serverListenThreadManager.getServerExposedListenPort());
+        if (Objects.nonNull(CLIENT_THREAD_CACHE.get(serverListenThreadManager.getConfig().getServerExposedListenPort()))) {
+            log.warn("serverExposedListenPort[{}]已经存在", serverListenThreadManager.getConfig().getServerExposedListenPort());
         }
-        CLIENT_THREAD_CACHE.put(serverListenThreadManager.getServerExposedListenPort(), serverListenThreadManager);
+        CLIENT_THREAD_CACHE.put(serverListenThreadManager.getConfig().getServerExposedListenPort(), serverListenThreadManager);
     }
 
     public static void remove(Integer listenPort) {

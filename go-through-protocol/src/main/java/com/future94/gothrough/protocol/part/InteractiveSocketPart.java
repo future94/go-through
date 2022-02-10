@@ -17,18 +17,10 @@ public class InteractiveSocketPart extends BaseSocketPart implements ThreadManag
 
     private InteractivePassWay inToOutPassWay;
 
-    private Boolean nio;
-
     private final CountDownLatch countDownLatch = new CountDownLatch(2);
 
     public InteractiveSocketPart(ThreadManager threadManager) {
         super(threadManager);
-        nio = threadManager.getNio();
-    }
-
-    @Override
-    public Boolean getNio() {
-        return nio;
     }
 
     @Override

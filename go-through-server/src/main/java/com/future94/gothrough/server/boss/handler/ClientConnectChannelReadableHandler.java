@@ -1,4 +1,4 @@
-package com.future94.gothrough.server.handler;
+package com.future94.gothrough.server.boss.handler;
 
 import com.future94.gothrough.common.enums.InteractiveTypeEnum;
 import com.future94.gothrough.common.utils.SequenceUtils;
@@ -7,11 +7,9 @@ import com.future94.gothrough.protocol.model.dto.ClientConnectDTO;
 import com.future94.gothrough.protocol.model.dto.InteractiveResultDTO;
 import com.future94.gothrough.protocol.nio.handler.SimpleChannelReadableHandler;
 import com.future94.gothrough.protocol.nio.handler.context.ChannelHandlerContext;
-import com.future94.gothrough.server.listen.cache.ServerListenThreadCache;
+import com.future94.gothrough.server.cache.GoThroughContextHolder;
 import com.future94.gothrough.server.listen.thread.ServerListenThreadManager;
 import lombok.extern.slf4j.Slf4j;
-
-import java.io.IOException;
 
 /**
  * 处理{@link InteractiveTypeEnum#CLIENT_CONNECT}消息
@@ -33,26 +31,22 @@ public class ClientConnectChannelReadableHandler extends SimpleChannelReadableHa
         ClientConnectDTO clientConnectModel = msg.getData().convert(ClientConnectDTO.class);
         Integer listenPort = SequenceUtils.getSocketPortByPartKey(clientConnectModel.getSocketPartKey());
 
-        ServerListenThreadManager serverListenThreadManager = ServerListenThreadCache.get(listenPort);
+        ServerListenThreadManager serverListenThreadManager = GoThroughContextHolder.getServerListenThreadManager(listenPort);
 
         if (serverListenThreadManager == null) {
             ctx.write(InteractiveModel.of(msg.getInteractiveSeq(),
-                    InteractiveTypeEnum.COMMON_REPLY, InteractiveResultDTO.buildNoServerListen()));
+                    InteractiveTypeEnum.CLIENT_CONNECT_ANSWER, InteractiveResultDTO.buildNoServerListen()));
             return;
         }
-
-        // 回复设置成功，如果doSetPartClient没有找到对应的搭档，则直接按关闭处理
-        ctx.write(InteractiveModel.of(msg.getInteractiveSeq(),
-                InteractiveTypeEnum.COMMON_REPLY, InteractiveResultDTO.buildSuccess()));
 
         // 若设置失败，则关闭
         boolean status = serverListenThreadManager.doSetPartClient(clientConnectModel.getSocketPartKey(), ctx.getSocketChannel());
         if (status) {
-            try {
-                ctx.getSocketChannel().close();
-            } catch (IOException e) {
-                log.error("socket channel close error", e);
-            }
+            // 回复设置成功，如果doSetPartClient没有找到对应的搭档，则直接按关闭处理
+            ctx.write(InteractiveModel.of(msg.getInteractiveSeq(),
+                    InteractiveTypeEnum.CLIENT_CONNECT_ANSWER, InteractiveResultDTO.buildSuccess(clientConnectModel)));
+        } else {
+            log.warn("do set socket part client error, socketPartKey [{}]", clientConnectModel.getSocketPartKey());
         }
     }
 }

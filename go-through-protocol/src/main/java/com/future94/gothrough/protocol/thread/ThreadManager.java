@@ -14,6 +14,4 @@ public interface ThreadManager {
     default void noticeStopPassWay() {
 
     }
-
-    default Boolean getNio() { return true;};
 }

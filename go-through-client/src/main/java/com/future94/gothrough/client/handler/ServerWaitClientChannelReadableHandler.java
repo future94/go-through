@@ -28,12 +28,12 @@ public class ServerWaitClientChannelReadableHandler extends SimpleChannelReadabl
     protected void channelRead0(ChannelHandlerContext ctx, InteractiveModel msg) {
         ServerWaitClientDTO clientDTO = msg.getData().convert(ServerWaitClientDTO.class);
         Integer listenPort = SequenceUtils.getSocketPortByPartKey(clientDTO.getSocketPartKey());
-        ClientThreadManager serverListenThreadManager = ClientThreadCache.get(listenPort);
-        if (serverListenThreadManager == null) {
+        ClientThreadManager clientThreadManager = ClientThreadCache.get(listenPort);
+        if (clientThreadManager == null) {
             ctx.write(InteractiveModel.of(msg.getInteractiveSeq(),
                     InteractiveTypeEnum.COMMON_REPLY, InteractiveResultDTO.buildNoServerListen()));
             return;
         }
-        serverListenThreadManager.createConnect(clientDTO);
+        clientThreadManager.createConnect(clientDTO);
     }
 }

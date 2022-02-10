@@ -1,13 +1,15 @@
-package com.future94.gothrough.server.thread;
+package com.future94.gothrough.server.boss.thread;
 
 import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
 import com.future94.gothrough.protocol.nio.thread.server.NioServer;
-import com.future94.gothrough.server.config.ServerConfig;
-import com.future94.gothrough.server.handler.ClientConnectChannelReadableHandler;
-import com.future94.gothrough.server.handler.ClientControlChannelReadableHandler;
+import com.future94.gothrough.server.boss.config.ServerConfig;
+import com.future94.gothrough.server.boss.handler.ClientConnectChannelReadableHandler;
+import com.future94.gothrough.server.boss.handler.ClientControlChannelReadableHandler;
+import com.future94.gothrough.server.cache.GoThroughContextHolder;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.nio.channels.SocketChannel;
 
 /**
  * @author weilai
@@ -29,8 +31,8 @@ public class ServerThreadManager {
         nioServer.setPort(serverConfig.getServerPort());
         nioServer.setReadableHandler(new ClientControlChannelReadableHandler());
         nioServer.setReadableHandler(new ClientConnectChannelReadableHandler());
-//        nioServer.setWritableHandler();
         this.server = nioServer;
+        GoThroughContextHolder.setServerThreadManager(this);
     }
 
     public void start() throws IOException {
@@ -45,5 +47,9 @@ public class ServerThreadManager {
         this.isAlive = true;
         this.server.start();
         log.info("client service [{}] start success", this.serverConfig.getServerPort());
+    }
+
+    public void write(SocketChannel socketChannel, Object msg) throws Exception {
+        server.writeChannel(socketChannel, msg);
     }
 }

@@ -76,13 +76,13 @@ public class HeartbeatThread implements Heartbeat, Runnable {
         if (this.clientThread.isCancel() || !this.isAlive()) {
             this.cancel();
         }
-        log.debug("开始发送心跳数据到[{}:{}]", this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort());
+        log.debug("开始发送心跳数据到[{}:{}]", this.clientThread.getConfig().getServerIp(), this.clientThread.getConfig().getServerExposedListenPort());
         try {
             this.clientThread.sendHeartbeatTest();
             this.failCount = 0;
             return;
         } catch (Exception e) {
-            log.warn("发送心跳数据到[{}:{}]异常", this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort());
+            log.warn("发送心跳数据到[{}:{}]异常", this.clientThread.getConfig().getServerIp(), this.clientThread.getConfig().getServerExposedListenPort());
             // FIXME: 发送心跳数据异常调用cannel后不会重试
             this.clientThread.cancel();
         }
@@ -94,18 +94,18 @@ public class HeartbeatThread implements Heartbeat, Runnable {
         try {
             boolean start = this.clientThread.start();
             if (start) {
-                log.info("第{}次重新建立连接[{}:{}]成功", this.failCount, this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort());
+                log.info("第{}次重新建立连接[{}:{}]成功", this.failCount, this.clientThread.getConfig().getServerIp(), this.clientThread.getConfig().getServerExposedListenPort());
                 this.failCount = 0;
                 return;
             } else {
-                log.warn("第[{}]次重新建立连接[{}:{}]失败", this.failCount, this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort());
+                log.warn("第[{}]次重新建立连接[{}:{}]失败", this.failCount, this.clientThread.getConfig().getServerIp(), this.clientThread.getConfig().getServerExposedListenPort());
             }
         } catch (Exception ex) {
-            log.warn("第[{}]次重新建立连接[{}:{}]失败", this.failCount, this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort(), ex);
+            log.warn("第[{}]次重新建立连接[{}:{}]失败", this.failCount, this.clientThread.getConfig().getServerIp(), this.clientThread.getConfig().getServerExposedListenPort(), ex);
         }
 
         if (this.failCount >= this.maxRetryConnectCount) {
-            log.error("尝试重新连接[{}:{}]超过最大次数[{}]，关闭客户端", this.clientThread.getServerIp(), this.clientThread.getServerExposedListenPort(), this.getMaxRetryConnectCount());
+            log.error("尝试重新连接[{}:{}]超过最大次数[{}]，关闭客户端", this.clientThread.getConfig().getServerIp(), this.clientThread.getConfig().getServerExposedListenPort(), this.getMaxRetryConnectCount());
             this.clientThread.cancel();
             this.cancel();
         }

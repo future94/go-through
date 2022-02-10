@@ -38,6 +38,7 @@ public class ServerSelectorThread extends AbstractSelectThread {
      * {@code key}      Accept到的SocketChannel
      * {@code value}    Socket对应操作的buffer
      */
+    // FIXME 客户端的不需要清理，监听端ACCEPT到的未清理
     private final Map<SocketChannel, FrameBuffer> bufferCache = new ConcurrentHashMap<>();
 
     public ServerSelectorThread(NioServer server) throws IOException {

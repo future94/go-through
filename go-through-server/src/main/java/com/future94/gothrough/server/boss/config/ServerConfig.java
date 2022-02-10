@@ -1,4 +1,4 @@
-package com.future94.gothrough.server.config;
+package com.future94.gothrough.server.boss.config;
 
 /**
  * @author weilai

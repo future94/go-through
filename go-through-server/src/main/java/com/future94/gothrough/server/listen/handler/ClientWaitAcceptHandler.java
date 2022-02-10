@@ -7,6 +7,7 @@ import com.future94.gothrough.protocol.model.dto.ServerWaitClientDTO;
 import com.future94.gothrough.protocol.nio.handler.AcceptHandler;
 import com.future94.gothrough.protocol.part.InteractiveSocketPart;
 import com.future94.gothrough.protocol.part.SocketPart;
+import com.future94.gothrough.server.cache.GoThroughContextHolder;
 import com.future94.gothrough.server.listen.thread.ServerListenThreadManager;
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,7 +34,7 @@ public class ClientWaitAcceptHandler implements AcceptHandler {
         socketPart.setRecvSocket(socketChannel);
         InteractiveModel model = InteractiveModel.of(InteractiveTypeEnum.SERVER_WAIT_CLIENT, new ServerWaitClientDTO(socketPartKey));
         try {
-            this.manager.write(manager.getClientSocketChannel(), model);
+            GoThroughContextHolder.getServerThreadManager().write(GoThroughContextHolder.getClientControlSocketChannel(this.manager.getListenPort()), model);
             this.manager.setSocketPartCache(socketPartKey, socketPart);
         } catch (Exception e) {
             log.error("ClientWaitHandler write SERVER_WAIT_CLIENT message error", e);

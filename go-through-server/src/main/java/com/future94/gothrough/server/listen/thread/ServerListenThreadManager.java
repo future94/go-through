@@ -4,11 +4,12 @@ import com.future94.gothrough.protocol.nio.thread.server.GoThroughNioServer;
 import com.future94.gothrough.protocol.nio.thread.server.NioServer;
 import com.future94.gothrough.protocol.part.SocketPart;
 import com.future94.gothrough.protocol.thread.ThreadManager;
-import com.future94.gothrough.server.listen.cache.ServerListenThreadCache;
+import com.future94.gothrough.server.cache.GoThroughContextHolder;
 import com.future94.gothrough.server.listen.config.ServerListenConfig;
-import com.future94.gothrough.server.listen.handler.ClientWaitAcceptHandler;
 import com.future94.gothrough.server.listen.handler.CommonReplyReadableHandler;
 import com.future94.gothrough.server.listen.handler.HeartBeatReadableHandler;
+import com.future94.gothrough.server.listen.handler.PassWayReadableHandler;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -36,6 +37,7 @@ public class ServerListenThreadManager implements ThreadManager {
     /**
      * 监听配置
      */
+    @Getter
     private final ServerListenConfig config;
 
     /**
@@ -49,21 +51,16 @@ public class ServerListenThreadManager implements ThreadManager {
      */
     private final Map<String, SocketPart> socketPartCache = new ConcurrentHashMap<>();
 
-    /**
-     * 与之交互的确认的ClientSocketChannel
-     */
-    private SocketChannel clientSocketChannel;
-
     public ServerListenThreadManager(ServerListenConfig config) {
         this.config = config;
         GoThroughNioServer nioServer = new GoThroughNioServer();
         nioServer.setPort(config.getListenPort());
-        nioServer.setAcceptHandler(new ClientWaitAcceptHandler(this));
+//        nioServer.setAcceptHandler(new ClientWaitAcceptHandler(this));
+        nioServer.setReadableHandler(new PassWayReadableHandler(this));
         nioServer.setReadableHandler(new CommonReplyReadableHandler());
         nioServer.setReadableHandler(new HeartBeatReadableHandler());
         this.server = nioServer;
-        ServerListenThreadCache.remove(this.getListenPort());
-        ServerListenThreadCache.add(this);
+        GoThroughContextHolder.setServerListenThreadManager(this);
         log.info("server listen port[{}] is created!", this.getListenPort());
     }
 
@@ -75,7 +72,7 @@ public class ServerListenThreadManager implements ThreadManager {
         server.writeChannel(socketChannel, msg);
     }
 
-    public void start(SocketChannel clientSocketChannel) throws IOException {
+    public void start() throws IOException {
         if (this.isCancel) {
             throw new IllegalStateException("已退出，不得重新启动");
         }
@@ -83,7 +80,6 @@ public class ServerListenThreadManager implements ThreadManager {
             throw new IllegalStateException("已经启动过了");
         }
         this.server.start();
-        this.clientSocketChannel = clientSocketChannel;
         this.isAlive = true;
         log.info("setControlSocket[{}]", this.getListenPort());
 
@@ -100,7 +96,7 @@ public class ServerListenThreadManager implements ThreadManager {
 
         log.info("serverListen cancelling[{}]", this.config.getListenPort());
 
-        ServerListenThreadCache.remove(this.config.getListenPort());
+        GoThroughContextHolder.removeServerListenThreadManager(this.config.getListenPort());
 
         this.stop();
 
@@ -176,9 +172,5 @@ public class ServerListenThreadManager implements ThreadManager {
 
     public Integer getListenPort() {
         return this.config.getListenPort();
-    }
-
-    public SocketChannel getClientSocketChannel() {
-        return this.clientSocketChannel;
     }
 }
