@@ -14,7 +14,7 @@
     </appenders>
 
     <loggers>
-        <root level="debug">
+        <root level="DEBUG">
             <appender-ref ref="AsyncConsole"/>
         </root>
     </loggers>
