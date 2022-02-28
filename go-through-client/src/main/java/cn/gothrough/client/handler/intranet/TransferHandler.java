@@ -6,7 +6,6 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelOption;
 import io.netty.channel.SimpleChannelInboundHandler;
 
 /**
@@ -33,9 +32,9 @@ public class TransferHandler extends SimpleChannelInboundHandler<ByteBuf> {
 //    @Override
 //    public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
 //        Channel channel = ctx.channel();
-//        Channel serverChannel = channel.attr(AttributeKeyConstants.PROXY_CHANNEL).get();
-//        if (serverChannel != null) {
-//            serverChannel.config().setAutoRead(channel.isWritable());
+//        Channel clientServerChannel = channel.attr(AttributeKeyConstants.CLIENT_SERVER_CHANNEL).get();
+//        if (clientServerChannel != null) {
+//            clientServerChannel.config().setAutoRead(channel.isWritable());
 //        }
 //        super.channelWritabilityChanged(ctx);
 //    }

@@ -53,17 +53,8 @@ public class DispatcherHandler extends SimpleChannelInboundHandler<BinaryMessage
             logger.warn("未找到消息处理器, type:[{}]", msg.getType());
         }
     }
-//
-//    @Override
-//    public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
-//        Channel proxyChannel = ctx.channel().attr(AttributeKeyConstants.PROXY_CHANNEL).get();
-//        if (proxyChannel != null) {
-//            proxyChannel.config().setAutoRead(ctx.channel().isWritable());
-//        }
-//        super.channelWritabilityChanged(ctx);
-//    }
 
-//    @Override
+    //    @Override
 //    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
 //        Channel proxyChannel = ctx.channel().attr(AttributeKeyConstants.PROXY_CHANNEL).get();
 //        if (proxyChannel != null && proxyChannel.isActive()) {
@@ -83,4 +74,9 @@ public class DispatcherHandler extends SimpleChannelInboundHandler<BinaryMessage
 //        }
 //        super.channelInactive(ctx);
 //    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        logger.warn(String.format("Channel error:%s", ctx.channel()), cause);
+    }
 }

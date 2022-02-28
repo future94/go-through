@@ -47,9 +47,19 @@ public interface AttributeKeyConstants {
     AttributeKey<String> CLIENT_KEY = AttributeKey.newInstance("client_key");
 
     /**
-     * 客户端要暴漏的主机地址（host:ip）
+     * 客户端要暴漏的主机地址（host:port）
      */
     AttributeKey<String> CLIENT_INTRANET_HOSTNAME = AttributeKey.newInstance("client_intranet_hostname");
+
+    /**
+     * 客户端要暴漏的主机（host）
+     */
+    AttributeKey<String> CLIENT_INTRANET_HOST = AttributeKey.newInstance("client_intranet_host");
+
+    /**
+     * 客户端要暴漏的IP（ip）
+     */
+    AttributeKey<Integer> CLIENT_INTRANET_PORT = AttributeKey.newInstance("client_intranet_port");
 
     /**
      * 服务端监听生成的ID

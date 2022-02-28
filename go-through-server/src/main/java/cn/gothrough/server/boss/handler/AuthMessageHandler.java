@@ -7,6 +7,8 @@ import cn.gothrough.server.config.ServerConfig;
 import cn.gothrough.server.context.GoThroughContext;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,6 +18,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author weilai
  */
 public class AuthMessageHandler implements MessageHandler {
+
+    private static Logger logger = LoggerFactory.getLogger(AuthMessageHandler.class);
 
     @Override
     public boolean supports(byte type) {
@@ -28,10 +32,9 @@ public class AuthMessageHandler implements MessageHandler {
         String key = message.getData();
         List<Integer> proxyPortList = ServerConfig.getInstance().proxyPortList(key);
         if (proxyPortList == null || proxyPortList.isEmpty()) {
-            return false;
-        }
-        Channel channel = GoThroughContext.getClientChannel(key);
-        if (channel != null) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("Auth消息未找到监听转发端口, key:[{}]", key);
+            }
             return false;
         }
         clientChannel.attr(AttributeKeyConstants.PROXY_PORT).set(proxyPortList);

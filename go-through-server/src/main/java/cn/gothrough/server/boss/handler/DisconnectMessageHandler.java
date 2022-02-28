@@ -9,6 +9,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.util.internal.StringUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -20,6 +22,8 @@ import java.util.Map;
  */
 public class DisconnectMessageHandler implements MessageHandler {
 
+    private static Logger logger = LoggerFactory.getLogger(DisconnectMessageHandler.class);
+
     @Override
     public boolean supports(byte type) {
         return BinaryMessage.TYPE_DISCONNECT == type;
@@ -29,8 +33,17 @@ public class DisconnectMessageHandler implements MessageHandler {
     public boolean process(ChannelHandlerContext ctx, BinaryMessage message) {
         Channel channel = ctx.channel();
         String key = channel.attr(AttributeKeyConstants.CLIENT_KEY).get();
+        String serverListenId = message.getData();
+        if (StringUtil.isNullOrEmpty(serverListenId)) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("Disconnect消息获取ServerListenId失败");
+            }
+            return false;
+        }
         if (StringUtil.isNullOrEmpty(key)) {
-            String serverListenId = message.getData();
+            if (logger.isDebugEnabled()) {
+                logger.debug("Disconnect消息未获取到ClientKey, serverListenId:[{}]", serverListenId);
+            }
             Map<String, Channel> clientChannelMap = channel.attr(AttributeKeyConstants.SERVER_LISTEN_CHANNEL_MAPPING).get();
             Channel clientChannel = clientChannelMap.remove(serverListenId);
             if (clientChannel != null) {
@@ -41,10 +54,13 @@ public class DisconnectMessageHandler implements MessageHandler {
         }
         Channel clientChannel = GoThroughContext.getClientChannel(key);
         if (clientChannel == null) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("Disconnect消息未获取到客户端信息, serverListenId:[{}]", serverListenId);
+            }
             return true;
         }
-        Map<String, Channel> clientChannelMap = channel.attr(AttributeKeyConstants.SERVER_LISTEN_CHANNEL_MAPPING).get();
-        Channel listenChannel = clientChannelMap.remove(channel.attr(AttributeKeyConstants.SERVER_LISTEN_ID).get());
+        Map<String, Channel> clientChannelMap = clientChannel.attr(AttributeKeyConstants.SERVER_LISTEN_CHANNEL_MAPPING).get();
+        Channel listenChannel = clientChannelMap.remove(serverListenId);
         listenChannel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         channel.attr(AttributeKeyConstants.PROXY_CHANNEL).set(null);
         channel.attr(AttributeKeyConstants.CLIENT_KEY).set(null);

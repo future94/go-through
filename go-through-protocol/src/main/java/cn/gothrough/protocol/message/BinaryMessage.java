@@ -89,6 +89,11 @@ public class BinaryMessage {
         return message;
     }
 
+    /**
+     * 构建{@link #TYPE_TRANSFER}消息
+     * @param data          serverListenId
+     * @param byteBuffer    转发的内容
+     */
     public static BinaryMessage buildTransferMessage(String data, byte[] byteBuffer) {
         BinaryMessage message = new BinaryMessage();
         message.setType(TYPE_TRANSFER);

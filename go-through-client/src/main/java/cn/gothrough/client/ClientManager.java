@@ -6,7 +6,6 @@ import cn.gothrough.client.handler.intranet.TransferHandler;
 import cn.gothrough.protocol.codec.BinaryMessageDecoder;
 import cn.gothrough.protocol.codec.BinaryMessageEncoder;
 import cn.gothrough.protocol.constants.CodecConstants;
-import cn.gothrough.protocol.handler.HeartbeatHandler;
 import cn.gothrough.protocol.message.BinaryMessage;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFutureListener;
@@ -48,7 +47,7 @@ public class ClientManager {
                         ch.pipeline().addLast(new BinaryMessageEncoder());
                         ch.pipeline().addLast(new BinaryMessageDecoder(CodecConstants.MAX_FRAME_LENGTH, CodecConstants.LENGTH_FIELD_OFFSET, CodecConstants.LENGTH_FIELD_LENGTH, CodecConstants.LENGTH_ADJUSTMENT, CodecConstants.INITIAL_BYTES_TO_STRIP));
 //                        ch.pipeline().addLast(new HeartbeatHandler(60, 50, 0));
-                        ch.pipeline().addLast(new DispatcherHandler(serverBootstrap, intranetBootstrap));
+                        ch.pipeline().addLast(new DispatcherHandler(intranetBootstrap));
                     }
                 }
            );
@@ -60,7 +59,7 @@ public class ClientManager {
             if (future.isSuccess()) {
                 GoThroughContext.setBossServerChannel(future.channel());
                 future.channel().writeAndFlush(BinaryMessage.buildAuthMessage("clientId"));
-                logger.info("连接成功");
+                logger.info("连接BossServer成功");
             } else {
                 logger.warn("连接失败", future.cause());
                 reconnect();
